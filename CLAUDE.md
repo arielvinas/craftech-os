@@ -11,7 +11,7 @@ Sistema de registro de los compromisos financieros de Craftech. Este archivo es 
 
 ## Estado (18-oct-2026)
 
-Revisión de arquitectura hecha: `plan/adr/ADR-001-espejo-de-planillas-en-postgres.md` (veredicto: simplify; ajusta la propuesta sin reabrirla). Siguiente paso: `/ticket plan/adr/ADR-001-espejo-de-planillas-en-postgres.md` para cortar la etapa A. Todavía no hay código aprobado ni PRDs.
+Revisión de arquitectura hecha: `plan/adr/ADR-001-espejo-de-planillas-en-postgres.md` (veredicto: simplify; ajusta la propuesta sin reabrirla). Etapa A cortada en siete tickets, `plan/tickets/T-001` a `T-007`, con `plan/milestones.md` (etapas y reglas de carriles). No hay PRD aparte: la propuesta aprobada más el ADR son la verdad de la etapa A. Siguiente paso: `/coordinate T-001`. Todavía no hay código.
 
 ## Spike descartado: no usar
 
