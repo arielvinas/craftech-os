@@ -55,3 +55,7 @@ Reglas fijas del proyecto: código, comentarios, tests y commits en inglés con 
 - Esquemas de pestañas (columna clave, bloques) en `sources.yaml` (T-004).
 - Terraform, AWS, cualquier cosa fuera de la laptop (etapa D).
 - Tablas de etapas B y C (clientes, hechos, paridad): ADR, cambio 10.
+
+## Decisions
+
+- 2026-10-18 — **Títulos exactos de los 7 P&L por unidad de negocio, pestañas agrupadas entre paréntesis y pestañas de Proyeccion sueldos (dudas 1-3)** → Opción (a): una única lectura de solo metadatos (títulos de las 20 planillas y nombres de pestañas, sin valores de celdas) con la cuenta de servicio de solo lectura finance-bot-ingest (clave en ~/.config/craftech-os/secrets/), con un script descartable fuera del repo. Nunca escribir en Google. En config/sources.yaml solo nombres de planillas y pestañas; los IDs de Drive son de T-002.
