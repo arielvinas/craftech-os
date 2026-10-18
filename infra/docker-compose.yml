@@ -1,0 +1,30 @@
+name: craftech-os
+
+services:
+  postgres:
+    image: postgres:16
+    command: ["postgres", "-c", "default_toast_compression=lz4"]
+    env_file: .env
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://craftech_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  db:

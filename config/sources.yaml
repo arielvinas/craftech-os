@@ -1,0 +1,344 @@
+# Finance spreadsheets that Craftech OS mirrors, and the class of each tab.
+# Source: docs/03-proposal.md, annex A. Titles and tab names are copied exactly
+# as Google has them, spaces included. Only names live here, never cell values.
+#
+# Classes: CARGA, DERIVADA, HISTORICA, IGNORAR, A_CONFIRMAR, SIN_CLASIFICAR.
+# A_CONFIRMAR: imported once, not read again until Finanzas says what it is.
+# all_tabs: every tab gets that class; tabs are registered when first read (T-002).
+
+sources:
+  - title: "Facturación - Craftech Total"
+    tabs:
+      CARGA:
+        - "Pagos"
+        - "Pagos ARG"
+        - "VENTAS"
+        - "PROYECCION VENTAS"
+        - "PROYECCION PAGOS USA (2025-2026)"
+      DERIVADA:
+        - "listado-ventas"
+        - "listado-ventas-2025"
+        - "listado-ventas-proyectadas"
+        - "listado-ventas-proyectadas-2025-2026"
+        - "data-ventas-2025"
+        - "data-pagos-2025"
+        - "data-proyeccion-sales-2025"
+        - "Ventas IA"
+        - "Ventas Data"
+        - "Ventas DevOps"
+        - "Q-Ventas"
+        - "M-Ventas"
+        - "3M-Ventas"
+        - "InterM-Ventas"
+      HISTORICA:
+        - "Pagos USA (2021)"
+        - "Pagos USA (2022)"
+        - "Pagos USA (2023)"
+        - "Pagos USA (2024)"
+        - "Pagos ARG 2021"
+        - "Pagos ARG (2022)"
+        - "Pagos ARG (2023)"
+        - "Pagos ARG (2024)"
+        - "VENTAS USA 2023"
+        - "VENTAS USA 2024"
+        - "Ventas ARG (2024)"
+        - "Pagos AWS (2023)"
+        - " Pagos USA Sleakops(2023)"  # leading space, as in Google
+        - "Pagos USA Sleakops(2024)"
+        - "Proyeccion Sales USA (2024)"
+        - "Proyeccion Sales USA (2025)"
+        - "listado-ventas-2023"
+        - "listado-ventas-2024"
+        - "listado-proyeccion sales USA-2024"
+        - "Ventas con CEI"
+        - "listado-ventas-CEI"
+        - "Historia"
+      IGNORAR:
+        - "Ventas ARG (2025)"  # Ro already copies it into VENTAS
+        - "recalc"
+        - "JDJDKDKDKDKD"
+        - "Copia de VENTAS USA 2025 COMPARATIVO"
+        - "Hubspot Corrección NO USAR VENTAS USA 2025"
+      A_CONFIRMAR:
+        - "Gastos"
+
+  - title: "Facturación - SleakOps Total"
+    tabs:
+      CARGA:
+        - "Pagos"
+        - "Pagos ARG"
+        - "VENTAS"
+        - "PROYECCION PAGOS"
+        - "PROYECCION VENTAS"
+      DERIVADA:
+        - "listado-ventas"
+        - "listado-ventas-actual"
+        - "listado-ventas proyectadas-actual"
+        - "listado-ventas-proyectadas"
+        - "listado-pagos"
+        - "listado-ingresos"
+        - "listado-ventas-aws"
+        - "listado-ventas-aws-2025"
+        - "listado-pagos-suscripciones"
+        - "listado-pagos-suscripciones-2025"
+        - "listado-pagos-onboarding"
+        - "listado-pagos-onboarding-2025"
+      HISTORICA:
+        - "Pago USA 2023"
+        - "VENTAS 2023"
+        - "Listado-ventas-2023"
+        - "Pagos USA 2024 - SleakOps"
+        - "Ventas USA 2024 - SleakOps"
+        - "Pago USA 2024 - Suscripciones"
+        - "Pagos USA 2024 - Onboarding"
+        - "Ventas 2024 - AWS"
+        - "Pagos ARG 2024 - Suscripciones"
+        - "listado-pagos-suscripciones-2024"
+        - "listado-ventas-aws-2024"
+        - "listado-pagos-onboarding-2024"
+        - "listado-ventas-2024"
+        - "Pago USA 2025 - Suscripciones"
+        - "Pagos USA 2025 - Onboarding"
+        - "Ventas 2025 - AWS"
+      IGNORAR:
+        - "recalc"
+
+  - title: "FUNDINGS - Log de status [OFICIAL]"
+    tabs:
+      CARGA:
+        - "FUNDINGS"
+      DERIVADA:
+        - "Pagos confirmados"
+        - "DB"
+        - "SUMA"
+      HISTORICA:
+        - "2025"
+
+  - title: "P&L Completo Craftech"
+    all_tabs: DERIVADA
+
+  # P&L by business unit (seven spreadsheets).
+  - title: "P&L - DATA"
+    all_tabs: DERIVADA
+  - title: "P&L - DEVOPS"
+    all_tabs: DERIVADA
+  - title: "P&L - GEN AI / DEVs"
+    all_tabs: DERIVADA
+  - title: "P&L - SleakOps"
+    all_tabs: DERIVADA
+  - title: "P&L Completo Craftech - U. Negocio IT"
+    all_tabs: DERIVADA
+  - title: "P&L DevOps & IT Services"
+    all_tabs: DERIVADA
+  - title: "P&L GEN AI - DATA"  # in the Drive trash as of 2026-10-18
+    all_tabs: DERIVADA
+
+  - title: "CASH FLOW MENSUAL"
+    tabs:
+      CARGA:
+        - "CASH FLOW USA"
+        - "CASH FLOW ARG"
+        - "Cash Flow - c/ pagos proyectados"
+        - "Pagos en disputa"
+        - "Gastos Budget 2026"
+      DERIVADA:
+        - "Resumen mensual Cash Flow ARG-USA"
+        - "Dashboard Historico Cash flow USA"
+        - "Dashboard Historico Cash flow USA proyectado"
+        - "Tracking Cashflow"
+      HISTORICA:
+        - "Historico Cash Flow"
+        - "Tracking Cashflow Historico"
+      A_CONFIRMAR:
+        - "FACTURAS A JUSTIFICAR"
+        - "Gastos TC"
+
+  - title: "Base informe Craftech "  # trailing space, as in Google
+    tabs:
+      CARGA:
+        - "Consolidado"
+        - "Mesh"
+        - "Mercury"
+        - "Galicia"
+        - "Macro"
+        - "Credicoop"
+        - "Caja"
+        - "Ajuste cobros clientes"
+        - "Ajuste Credito Fiscal"
+        - "Sueldos"
+        - "Bonos"
+        - "SAC"
+        - "Comisiones"
+        - "control sueldos y ccss"
+        - "Ingresos Financieros"
+        - "CIRCUITO TECNOM/YELLAMO"
+        - "Prestamos"
+        - "Deuda Planes de pago"
+        - "Planes AFIP"
+      DERIVADA:
+        - "TC MEP"
+        - "GASTOS POR AREA"
+        - "Resumen Gastos"
+        - "Resumen Ingresos Financieros"
+        - "Planilla de gastos - control budget"
+        - "Consolidado Banco ARG"
+        - "BASE DETALLE"
+      HISTORICA:
+        - "Base facturacion"
+        - "VETA - ARG"
+        - "VETA - USD"
+        - "Rendimientos Inversiones - VETA - 2023"
+        - "USDC"
+        - "Caja Crypto"
+        - "Tax EEUU 2021"
+        - "Tax EEUU 2022"
+        - "Tax EEUU 2023"
+        - "Tax EEUU 2024 - Copia de seguridad"
+        - "Tax EEUU 2025 - Copia de Seguridad"
+      A_CONFIRMAR:
+        - "Tax EEUU 2025 - calculo para budget"
+        - "Dolar Futuro"
+        - "Viajes Marketing/Comercial"
+        - "Sleakops"
+        - "Sleakops - ajuste"
+
+  - title: "Proyeccion sueldos"
+    tabs:
+      CARGA:
+        - "Base sueldos"
+        - "Calculo sueldos proyectados"
+        - "Resumen sueldos proyectados 2025"
+        - "Resumen sueldos proyectados 2026"
+        - "Resumen sueldos proyectados 2027"
+        - "Sueldos percibidos"
+        - "Comisiones percibidas"
+        - "Comisiones devengadas"
+        - "Nomina"
+        - "Bandas salariales"
+        - "Estado de resultados objetivo"
+      DERIVADA:
+        - "Sueldos percibidos Finales"
+        - "Sueldos devengados"
+        - "data-sueldos-devengados"
+        - "data-sueldos-percibidos"
+        - "data-comisiones-devengadas"
+        - "data-comisiones-percibidas"
+        - "data-sueldos+comisiones-percibidas"
+        - "data-sueldos+comisiones-devengadas"
+        - "Cantidad de empleados por area"
+        - "cantidad de nomina"
+      HISTORICA:
+        - "Proyecciones sueldos devengados - 2023/2024"
+        - "Bonos Percibidos Ene 2025 (Dic 2024)"
+
+  - title: "Base sueldos - historico y actual"
+    tabs:
+      CARGA:
+        - "sueldos-percibidos"
+        - "sueldos-percibidos-actual"
+        - "sueldos-devengados"
+        - "sueldos-devengados-actual"
+      HISTORICA:
+        - "sueldos-percibidos-historico"
+        - "sueldos-devengados-historico"
+
+  - title: "SUELDOS EEUU"
+    tabs:
+      CARGA:
+        - "Sueldos"
+        - "Bajas"
+        - "Comisiones proyectadas"
+      DERIVADA:
+        - "Neto a transferir"
+        - "Monto de cargas que se descuenta"
+        - "Control de invoices entregadas"
+      HISTORICA:
+        - "Sueldos 2024 brutos"
+      IGNORAR:
+        - "Copia de Sueldos"
+        - "Temporal"
+        - "Hoja 40"
+
+  - title: "Budget"
+    tabs:
+      CARGA:
+        - "COMERCIAL"
+        - "MKT"
+        - "RRHH"
+        - "IT"
+        - "SLEAKOPS"
+        - "DATA"
+        - "GEN IA"
+        - "DEVS"
+        - "GERENCIAL"
+        - "LEGALES"
+        - "COMUNES"
+        - "FINANZAS"
+        - "CONTABLE"
+        - "IMPUESTOS"
+        - "OPERACIONES"
+        - "ACTIVOS"
+        - "DEUDA AFIP"
+        - "Gastos de USA"
+        - "Dolar - Inflación"
+      DERIVADA:
+        - "Consolidado"
+        - "data-consolidado"
+        - "Control sumas budgets"
+        - "Cantidad de empleados por area"
+      IGNORAR:
+        - "Tabla dinámica 1"
+        - "cosas rrhh"
+
+  - title: "Budget por Area 2026 - Final"
+    tabs:
+      CARGA:
+        - "Comercial"
+        - "MKT"
+        - "RRHH"
+        - "DevOps"
+        - "SleakOps"
+        - "Data"
+        - "Gen IA"
+        - "Devs"
+        - "Gerencial"
+        - "Legales"
+        - "Comunes"
+        - "Finanzas"
+        - "Contable"
+        - "Impuestos"
+        - "Operaciones"
+        - "Activos"
+        - "Supuestos Macro"
+        - "Dolar - Inflación"
+      DERIVADA:
+        - "Consolidado Budget"
+        - "Control Budget vs Real"
+      IGNORAR:
+        - "Instrucciones"
+
+  - title: "Costos"
+    tabs:
+      DERIVADA:
+        - "sueldos"
+        - "gastos"
+        - "costos"
+        - "costos-craftech"
+        - "costos-sleakops"
+        - "ingresos-financieros"
+        - "data-costos-por-persona-craftech"
+        - "data-costos-craftech"
+        - "data-rentabilidad-craftech"
+        - "data-rentabilidad-sleakops"
+        - "data-pasivos"
+        - "data-costos-sleakops"
+        - "data-gastos+sueldos-craftech"
+        - "control-gastos-areas"
+      A_CONFIRMAR:
+        - "Budget IT"
+        - "nomina-2024"
+        - "nomina-actual"
+        - "pasivos"
+
+  - title: "Costos - Escenario 1"
+    all_tabs: DERIVADA

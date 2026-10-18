@@ -1,13 +1,13 @@
 ---
 id: T-001
 title: Andamiaje: paquete Python, Compose con PostgreSQL, migraciones SQL, CLI y carga de sources.yaml
-status: todo
+status: pr
 priority: high
 lane: core
 depends_on: []
 effort: M
 milestone: A
-branch:
+branch: arielvinas/t-001-andamiaje
 ---
 
 ## Context
@@ -39,14 +39,14 @@ Reglas fijas del proyecto: código, comentarios, tests y commits en inglés con 
 
 ## Acceptance criteria
 
-- [ ] `docker compose -f infra/docker-compose.yml up -d postgres` levanta PostgreSQL 16 escuchando solo en `127.0.0.1:5432` (`docker compose port` lo muestra; `ss`/`lsof` no lo ve en otra interfaz) y con `default_toast_compression = lz4` (`SHOW default_toast_compression`).
-- [ ] `docker compose run --rm app craftech-os migrate` crea `schema_migration`, `source`, `source_tab`, `system_event`; correrlo de nuevo no hace nada y termina en 0; modificar un archivo ya aplicado hace que termine distinto de 0 con un mensaje que nombra el archivo.
-- [ ] `SELECT obj_description('source'::regclass)` y `col_description` de cada columna de las tres tablas devuelven texto en español (ninguna columna sin comentario; test que lo verifica).
-- [ ] `docker compose run --rm app craftech-os sources load` deja 20 filas en `source` con los títulos exactos del anexo A y una fila en `source_tab` por cada pestaña nombrada en el anexo, con su clase; las 12 pestañas "A confirmar" del anexo quedan con clase `A_CONFIRMAR`. Correrlo dos veces no duplica filas.
-- [ ] `craftech-os sources list` imprime las 20 planillas con el conteo por clase.
-- [ ] `uv run pytest` y `uv run ruff check` pasan en limpio en la máquina de Ariel; los tests de integración se saltean con un mensaje claro si `TEST_DATABASE_URL` no está definida.
-- [ ] `git grep -i -E 'private_key|BEGIN PRIVATE|@gmail|\.iam\.gserviceaccount'` no devuelve nada; `infra/.env` sigue ignorado y `infra/.env.example` no tiene valores.
-- [ ] El comando `craftech-os` corre dentro del contenedor y también con `uv run craftech-os` fuera de él (mismo código, misma base por `DATABASE_URL`).
+- [x] `docker compose -f infra/docker-compose.yml up -d postgres` levanta PostgreSQL 16 escuchando solo en `127.0.0.1:5432` (`docker compose port` lo muestra; `ss`/`lsof` no lo ve en otra interfaz) y con `default_toast_compression = lz4` (`SHOW default_toast_compression`).
+- [x] `docker compose run --rm app craftech-os migrate` crea `schema_migration`, `source`, `source_tab`, `system_event`; correrlo de nuevo no hace nada y termina en 0; modificar un archivo ya aplicado hace que termine distinto de 0 con un mensaje que nombra el archivo.
+- [x] `SELECT obj_description('source'::regclass)` y `col_description` de cada columna de las tres tablas devuelven texto en español (ninguna columna sin comentario; test que lo verifica).
+- [x] `docker compose run --rm app craftech-os sources load` deja 20 filas en `source` con los títulos exactos del anexo A y una fila en `source_tab` por cada pestaña nombrada en el anexo, con su clase; las 12 pestañas "A confirmar" del anexo quedan con clase `A_CONFIRMAR`. Correrlo dos veces no duplica filas.
+- [x] `craftech-os sources list` imprime las 20 planillas con el conteo por clase.
+- [x] `uv run pytest` y `uv run ruff check` pasan en limpio en la máquina de Ariel; los tests de integración se saltean con un mensaje claro si `TEST_DATABASE_URL` no está definida.
+- [x] `git grep -i -E 'private_key|BEGIN PRIVATE|@gmail|\.iam\.gserviceaccount' -- app config infra pyproject.toml README.md` no devuelve nada; `infra/.env` sigue ignorado y `infra/.env.example` no tiene valores. — El comando se acotó a las rutas que agrega este ticket (QA ronda 1, F5): sobre todo el repo nunca puede dar vacío, porque `docs/01-understanding.md`, `docs/02-questions.md` y `docs/03-proposal.md` ya contenían el correo de la cuenta de servicio en `main` antes de este ticket, y este archivo contiene la expresión. La intención del criterio es que este ticket no agregue ningún secreto ni identificador. Verificado: vacío; `git check-ignore infra/.env` lo muestra ignorado; `infra/.env.example` tiene las cuatro variables vacías.
+- [x] El comando `craftech-os` corre dentro del contenedor y también con `uv run craftech-os` fuera de él (mismo código, misma base por `DATABASE_URL`).
 
 ## Out of scope
 
@@ -55,3 +55,55 @@ Reglas fijas del proyecto: código, comentarios, tests y commits en inglés con 
 - Esquemas de pestañas (columna clave, bloques) en `sources.yaml` (T-004).
 - Terraform, AWS, cualquier cosa fuera de la laptop (etapa D).
 - Tablas de etapas B y C (clientes, hechos, paridad): ADR, cambio 10.
+
+## Decisions
+
+- 2026-10-18 — **Títulos exactos de los 7 P&L por unidad de negocio, pestañas agrupadas entre paréntesis y pestañas de Proyeccion sueldos (dudas 1-3)** → Opción (a): una única lectura de solo metadatos (títulos de las 20 planillas y nombres de pestañas, sin valores de celdas) con la cuenta de servicio de solo lectura finance-bot-ingest (clave en ~/.config/craftech-os/secrets/), con un script descartable fuera del repo. Nunca escribir en Google. En config/sources.yaml solo nombres de planillas y pestañas; los IDs de Drive son de T-002.
+
+## Implementation
+
+Archivos:
+- `pyproject.toml`, `uv.lock`, `.python-version`: paquete `craftech-os` (Python 3.12, `uv_build` con `module-root = "app"`), dependencias `psycopg[binary]` 3 y `pyyaml`; desarrollo `pytest` y `ruff`. Consola `craftech-os = craftech_os.cli:main`.
+- `app/craftech_os/migrate.py`: aplicador. Archivos `NNNN_descripcion.sql` (nombre mal formado o número repetido es error), crea `schema_migration` (nombre, aplicada a las, sha256, con comentarios en español), revisa el hash de **todos** los aplicados antes de aplicar nada, y aplica cada pendiente en su transacción. Todo `migrate` corre bajo un `pg_advisory_lock` de sesión: dos `migrate` a la vez se esperan y ambos terminan en 0 (QA ronda 1, F2; reemplaza al `LOCK TABLE` y al segundo chequeo que había antes).
+- `app/migrations/0001_sources.sql`: `source`, `source_tab`, `system_event` con `COMMENT ON` en cada tabla y columna. Las clases son un `CHECK` (no un enum: agregar una clase es una migración de una línea). `source.default_class` guarda el `all_tabs` del YAML (nula si las pestañas se nombran una por una). "Entidad que la carga" quedó como `source.loaded_by` (texto nulo; el anexo A no lo trae por planilla, se completa más adelante).
+- `app/craftech_os/sources.py`: parser que valida el YAML (claves desconocidas, clases desconocidas, `tabs` y `all_tabs` juntos o ninguno, títulos o pestañas repetidos, nombres vacíos), sin recortar espacios de los nombres. `load` hace upsert por título y por (planilla, nombre) en una transacción y desactiva las pestañas que ya no figuran, salvo en planillas `all_tabs` (ahí las pestañas las da de alta T-002 al leer). Una planilla que sale del YAML conserva su fila pero todas sus pestañas quedan `active = false`, incluidas las dadas de alta al leer (QA ronda 1, F1). Una planilla `all_tabs` le pone su clase a todas sus pestañas, así una que pasa de `tabs` a `all_tabs` no queda con la clase vieja (F6). `summary` alimenta `sources list`.
+- `app/craftech_os/cli.py`: `argparse` con `migrate`, `sources load [--file]`, `sources list`. Lee `DATABASE_URL`; errores esperables (migración modificada, YAML inválido o mal formado, archivo inexistente, conexión, `DATABASE_URL` mal formada) van a stderr como `error: ...` con salida 1, sin captura genérica (F3). El mensaje de `DATABASE_URL` mal formada no repite la URL, para no imprimir una contraseña.
+- `config/sources.yaml`: 20 planillas, 244 pestañas nombradas (12 `A_CONFIRMAR`), 9 planillas `all_tabs: DERIVADA`.
+- `infra/Dockerfile` (python:3.12-slim, `postgresql-client-16` del repositorio apt de PostgreSQL, uv, usuario no root), `infra/docker-compose.yml` (proyecto `craftech-os`, volumen `craftech-os_db` para no chocar con los volúmenes viejos del spike), `infra/postgres-init/01-app-user.sh`, `infra/.env.example`.
+- `app/tests/`: unitarios del parser (incluye el `sources.yaml` real) y del orden de migraciones; integración contra `TEST_DATABASE_URL` (cada test vacía `public`; la fixture falla sin tocar nada si el nombre de la base no termina en `_test`, F4).
+- `README.md` en español.
+
+Nombres exactos (decisión de Ariel, opción a): una sola lectura de metadatos (títulos y nombres de pestañas, sin celdas) con finance-bot-ingest y un script descartable en `/tmp`, fuera del repo. Todas las pestañas nombradas del YAML se compararon contra esa lectura: coinciden las 244 y los conteos por planilla. Nombres con espacios que hay que respetar: `"Base informe Craftech "` (espacio final) y `" Pagos USA Sleakops(2023)"` (espacio inicial, sin espacio antes del paréntesis). Las agrupaciones entre paréntesis del anexo se expandieron a los nombres reales ("Pagos USA (2021)", …); en "Base informe Craftech " los paréntesis del anexo eran notas ("Ajuste cobros clientes", no "… (cuenta CLIENTES)").
+
+**"P&L GEN AI - DATA" está en la papelera de Drive** (18-oct-2026). Está en el YAML para llegar a las 20 del anexo; T-002 puede no poder leerla.
+
+Prueba rápida: `docker compose -f infra/docker-compose.yml up -d postgres && docker compose -f infra/docker-compose.yml run --rm app craftech-os migrate && docker compose -f infra/docker-compose.yml run --rm app craftech-os sources load && docker compose -f infra/docker-compose.yml run --rm app craftech-os sources list`.
+
+Sin verificar: nada de los criterios salvo lo dicho sobre el `git grep` de todo el repo. `uv` no estaba instalado en la máquina; lo instalé con `brew install uv`.
+
+## Test plan
+
+1. Volumen nuevo: `docker compose -f infra/docker-compose.yml down -v && … up -d postgres`; `docker compose port postgres 5432` da `127.0.0.1:5432`; `lsof -nP -iTCP:5432 -sTCP:LISTEN` solo muestra `127.0.0.1`; `SHOW default_toast_compression` da `lz4`; `craftech_app` tiene `rolsuper = f`.
+2. `run --rm app craftech-os migrate` dos veces: la primera "applied 0001_sources.sql", la segunda "nothing to apply", ambas salida 0.
+3. Agregar una línea a `app/migrations/0001_sources.sql`, `build app`, `migrate`: salida 1 y "migration 0001_sources.sql changed after it was applied". Revertir.
+4. `sources load` dos veces: `source` 20 filas, `source_tab` 244, 12 con `A_CONFIRMAR`; comparar los títulos contra Drive (incluido el espacio final de "Base informe Craftech ").
+5. Sacar una pestaña del YAML, `build app`, `sources load`: la fila queda con `active = false`; volver a ponerla la reactiva. Cambiarle la clase la actualiza.
+6. YAML inválido (`sources load --file` con una clase inexistente, un título repetido, `tabs` y `all_tabs` juntos): salida 1 con mensaje claro, sin cambios en la base.
+7. `sources list`: 20 planillas, conteos por clase en el orden del glosario; las nueve `all_tabs` dicen "all tabs DERIVADA".
+8. `uv run craftech-os sources list` desde la laptop con `DATABASE_URL` a `127.0.0.1` da lo mismo que dentro del contenedor; sin `DATABASE_URL`, salida 1.
+9. `uv run pytest` sin `TEST_DATABASE_URL`: 26 pasan y 12 se saltean con el motivo; con la variable apuntando a `<POSTGRES_DB>_test`: 38 pasan; apuntando a `<POSTGRES_DB>`: fallan con "its name must end in _test" y la base principal no cambia. `uv run ruff check` limpio.
+10. Cada columna de las cuatro tablas tiene comentario en español (`col_description`).
+11. (F1) `sources load --file` con `A: {CARGA: [x]}` y `B: {CARGA: [y]}`, después con solo `A`: `B|y` queda `active = false` y `sources list` muestra `'B': ` sin conteos.
+12. (F6) `A: {CARGA: [x]}` → `A: all_tabs: DERIVADA`: `x` queda `DERIVADA`; `sources list` dice `'A': all tabs DERIVADA; DERIVADA 1`.
+13. (F2) Base de prueba vacía, dos `migrate` en paralelo: ambos salida 0, uno "applied", el otro "nothing to apply".
+14. (F3) `sources load --file /nonexistent.yaml`, un YAML `sources: [` y `DATABASE_URL=garbage`: salida 1 con `error: ...` de una línea, sin traceback.
+
+Radio de impacto: no había código; nada preexistente depende de estos archivos. `README.md` se reescribió (tenía una línea).
+
+## Post-merge
+
+1. En `main`, si `infra/.env` no existe o viene del spike: `cp infra/.env.example infra/.env` y completar las cuatro variables (contraseñas solo letras y números). Si el volumen `craftech-os_db` ya existe con otra contraseña, `docker compose -f infra/docker-compose.yml down -v` (es una base nueva, no hay nada que perder).
+2. `docker compose -f infra/docker-compose.yml up -d postgres` → `docker compose -f infra/docker-compose.yml port postgres 5432` da `127.0.0.1:5432`.
+3. `docker compose -f infra/docker-compose.yml run --rm app craftech-os migrate` → "applied 0001_sources.sql".
+4. `docker compose -f infra/docker-compose.yml run --rm app craftech-os sources load` y `… sources list` → "20 sources".
+5. Opcional, limpieza del spike: `docker volume rm craftech-os_pgdata craftech-os_pgdata_v1` (ver `CLAUDE.md`).
