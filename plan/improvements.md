@@ -4,3 +4,4 @@
 - [ ] [data] Planilla all_tabs que sale de sources.yaml y vuelve queda con sus pestañas inactivas hasta que T-002 las relea (caso: 'P&L GEN AI - DATA', en la papelera de Drive) — QA T-001 r2
 - [ ] [test] Falta un test para la guarda '_test' de la fixture de base de prueba — QA T-001 r2
 - [ ] [ux] 'sources load' con 'sources: []' desactiva todas las pestañas sin aviso — QA T-001 r2
+- [ ] [data] Google recalcula fórmulas con ruido de punto flotante (hasta 4e-8, mismo texto formateado, misma versión de Drive): 4 pestañas de 'CASH FLOW MENSUAL' cambian de hash entre dos lecturas seguidas; T-004 debe comparar sin marcar esas celdas como cambios (y T-003 no relee si la versión no cambió) — T-002 implement
