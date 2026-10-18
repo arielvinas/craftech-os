@@ -45,7 +45,7 @@ uv run ruff check
 uv run pytest
 ```
 
-Los tests de integración usan la base de prueba y se saltean si `TEST_DATABASE_URL` no está definida. Cada test vacía el esquema `public` de esa base: nunca la apuntes a la base principal.
+Los tests de integración usan la base de prueba y se saltean si `TEST_DATABASE_URL` no está definida. Cada test vacía el esquema `public` de esa base: nunca la apuntes a la base principal (los tests fallan sin tocar nada si el nombre de la base no termina en `_test`).
 
 ```bash
 export TEST_DATABASE_URL="postgresql://craftech_app:${APP_DB_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}_test"
