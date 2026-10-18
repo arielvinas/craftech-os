@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Record of Craftech's financial commitments, mirrored from its spreadsheets"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "google-api-python-client>=2,<3",
+    "google-auth>=2,<3",
     "psycopg[binary]>=3.2,<4",
     "pyyaml>=6,<7",
 ]

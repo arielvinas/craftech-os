@@ -4,8 +4,11 @@ import sys
 from pathlib import Path
 
 import psycopg
+from googleapiclient.errors import HttpError
 
-from craftech_os import migrate, sources
+from craftech_os import events, migrate, sources
+from craftech_os.ingest import importer
+from craftech_os.ingest.google import Google, GoogleError
 
 
 def _connect() -> psycopg.Connection:
@@ -43,6 +46,56 @@ def cmd_sources_list(args) -> None:
     print(f"{len(rows)} sources")
 
 
+def cmd_sources_resolve(args) -> None:
+    """Find each source without drive_id by its exact title and write the id in the file."""
+    text = args.file.read_text(encoding="utf-8")
+    pending = [s["title"] for s in sources.parse(text) if s["drive_id"] is None]
+    google = Google.from_environment()
+    with _connect() as conn:
+
+        def on_retry(**details):
+            events.record(conn, "google_retry", **details)
+
+        found, errors = {}, []
+        for title in pending:
+            ids = google.find_spreadsheets(title, on_retry)
+            if len(ids) == 1:
+                found[title] = ids[0]
+            else:
+                errors.append(f"{title!r}: {len(ids)} spreadsheets with that exact name")
+        if found:
+            text = sources.with_drive_ids(text, found)
+            args.file.write_text(text, encoding="utf-8")
+            sources.load(conn, sources.parse(text))
+    print(f"resolved {len(found)} of {len(pending)} sources without drive_id")
+    if errors:
+        raise sources.SourcesError("; ".join(errors))
+
+
+def cmd_import(args) -> None:
+    """Read every tab of every source (or of one) and store a snapshot of what changed."""
+    parsed = sources.parse(args.file.read_text(encoding="utf-8"))
+    chosen = [s for s in parsed if args.source in (None, s["title"])]
+    if not chosen:
+        raise sources.SourcesError(f"no source titled {args.source!r} in {args.file}")
+    google = Google.from_environment()
+    with _connect() as conn:
+        sources.load(conn, parsed)
+        results = [importer.import_source(conn, google, s) for s in chosen]
+    for r in results:
+        print(
+            f"{r['title']!r}: {r['stored']} stored, {r['unchanged']} unchanged,"
+            f" {r['failed']} failed"
+        )
+    timed = sorted(((ms, r["title"], tab) for r in results for tab, ms in r["tabs"]), reverse=True)
+    print("slowest tabs:")
+    for ms, title, tab in timed[:10]:
+        print(f"  {ms} ms  {title!r} / {tab!r}")
+    failed = sum(r["failed"] for r in results)
+    if failed:
+        raise importer.ImportFailed(f"{failed} reads failed: see system_event")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="craftech-os")
     commands = parser.add_subparsers(required=True)
@@ -57,10 +110,30 @@ def main(argv: list[str] | None = None) -> int:
     sources_sub.add_parser("list", help="sources with active tab counts per class").set_defaults(
         func=cmd_sources_list
     )
+    resolve_cmd = sources_sub.add_parser(
+        "resolve", help="find the Drive id of each source by its exact title"
+    )
+    resolve_cmd.add_argument("--file", type=Path, default=sources.SOURCES_FILE)
+    resolve_cmd.set_defaults(func=cmd_sources_resolve)
+    import_cmd = commands.add_parser("import", help="read every tab and store snapshots")
+    import_cmd.add_argument("--source", help="only the spreadsheet with this exact title")
+    import_cmd.add_argument("--file", type=Path, default=sources.SOURCES_FILE)
+    import_cmd.set_defaults(func=cmd_import)
     args = parser.parse_args(argv)
     try:
         args.func(args)
-    except (migrate.MigrationError, sources.SourcesError, psycopg.OperationalError, OSError) as e:
+    except (
+        migrate.MigrationError,
+        sources.SourcesError,
+        importer.ImportFailed,
+        GoogleError,
+        psycopg.OperationalError,
+        OSError,
+    ) as e:
         print(f"error: {e}", file=sys.stderr)
+        return 1
+    except HttpError as e:
+        # The message may quote the request; the status is enough.
+        print(f"error: Google answered {e.resp.status}", file=sys.stderr)
         return 1
     return 0

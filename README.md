@@ -38,6 +38,31 @@ export DATABASE_URL="postgresql://craftech_app:${APP_DB_PASSWORD}@127.0.0.1:5432
 uv run craftech-os migrate
 ```
 
+## Importación inicial desde Google
+
+Requisito: el disco de la laptop cifrado con FileVault (Configuración del Sistema → Privacidad y seguridad → FileVault). La base local guarda copias completas de las planillas de Finanzas.
+
+La clave de la cuenta de servicio (`finance-bot-ingest`, solo lectura) vive en `~/.config/craftech-os/secrets/`, nunca en el repo ni en la imagen. En `infra/.env`, `GOOGLE_SA_KEY_FILE` es el nombre del archivo dentro de esa carpeta; Compose lo monta de solo lectura en el contenedor.
+
+1. Una vez, ubicar cada planilla en Drive por su título exacto y anotar su id en `config/sources.yaml` (corre fuera del contenedor porque escribe ese archivo; commitear el cambio):
+
+   ```bash
+   set -a; . infra/.env; set +a
+   export DATABASE_URL="postgresql://craftech_app:${APP_DB_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}"
+   GOOGLE_APPLICATION_CREDENTIALS=~/.config/craftech-os/secrets/$GOOGLE_SA_KEY_FILE uv run craftech-os sources resolve
+   ```
+
+   Solo busca las planillas que todavía no tienen `drive_id`. Si un título no aparece o aparece más de una vez, lo nombra y termina con error.
+
+2. Leer todas las pestañas (`--source "<título>"` para una sola planilla):
+
+   ```bash
+   docker compose -f infra/docker-compose.yml build app
+   docker compose -f infra/docker-compose.yml run --rm app craftech-os import
+   ```
+
+   Guarda una foto (`snapshot`) por pestaña, ocultas incluidas, salvo que el contenido sea idéntico a la última foto. Registra en `source_tab` el identificador de cada pestaña y las que Google tiene y el archivo no (como `SIN_CLASIFICAR`). Cada lectura, reintento y error queda en `system_event`, con identificadores y conteos, nunca valores. Al final imprime un resumen por planilla y las diez pestañas más lentas; si alguna lectura falló, termina con error.
+
 ## Tests
 
 ```bash
