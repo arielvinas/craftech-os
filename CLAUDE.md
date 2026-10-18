@@ -11,7 +11,7 @@ Sistema de registro de los compromisos financieros de Craftech. Este archivo es 
 
 ## Estado (18-oct-2026)
 
-Siguiente paso: `/architect docs/03-proposal.md`. Todavía no hay código aprobado ni PRDs.
+Revisión de arquitectura hecha: `plan/adr/ADR-001-espejo-de-planillas-en-postgres.md` (veredicto: simplify; ajusta la propuesta sin reabrirla). Siguiente paso: `/ticket plan/adr/ADR-001-espejo-de-planillas-en-postgres.md` para cortar la etapa A. Todavía no hay código aprobado ni PRDs.
 
 ## Spike descartado: no usar
 
