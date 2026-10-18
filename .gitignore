@@ -1,0 +1,26 @@
+# secrets and local env
+.env
+*.pem
+*service-account*.json
+*-key.json
+secrets/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.venv/
+dist/
+build/
+
+# data dumps never belong in the repo
+data/
+*.dump
+*.csv
+*.xlsx
