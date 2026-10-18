@@ -1,7 +1,7 @@
 ---
 id: T-001
 title: Andamiaje: paquete Python, Compose con PostgreSQL, migraciones SQL, CLI y carga de sources.yaml
-status: qa
+status: in-progress
 priority: high
 lane: core
 depends_on: []
