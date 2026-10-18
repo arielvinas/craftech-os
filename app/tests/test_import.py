@@ -56,7 +56,8 @@ class _Request:
         self.fake.calls.append(self.key)
         failures = self.fake.failures.get(self.key, [])
         if failures:
-            raise _http_error(failures.pop(0))
+            failure = failures.pop(0)
+            raise failure if isinstance(failure, Exception) else _http_error(failure)
         return self.answer()
 
 
@@ -79,7 +80,7 @@ class FakeGoogle:
                 "tabs": [_tab(21, "Resumen", "resumen ficticio")],
             },
         }
-        self.failures = {}  # (call, file id, tab title or None) -> statuses to answer first
+        self.failures = {}  # (call, file id, tab title or None) -> statuses or errors, raised first
         self.calls = []
         self.waits = []
 
@@ -256,6 +257,14 @@ def test_a_tab_that_keeps_failing_is_reported_and_the_import_continues(db, env, 
     out = capsys.readouterr()
     assert "'Cobranzas Ficticias': 1 stored, 0 unchanged, 1 failed" in out.out
     assert "1 reads failed" in out.err
+
+
+def test_a_transport_error_fails_only_that_tab(db, env, fake):
+    fake.failures[("grid", "file-a", "Cobros")] = [httplib2.decode.DecodeLimitError(MARKER)]
+    assert _import(env) == 1
+    assert fake.waits == []
+    assert [e for _, _, e in _events(db, "tab_failed")] == [{"error": "DecodeLimitError"}]
+    assert _snapshots(db) == 2
 
 
 def test_a_client_error_is_not_retried(db, env, fake):

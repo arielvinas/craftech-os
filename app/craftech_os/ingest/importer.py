@@ -5,6 +5,7 @@ Events and printed lines carry identifiers and counts, never cell values.
 
 import time
 
+import httplib2
 import psycopg
 from googleapiclient.errors import HttpError
 
@@ -13,7 +14,14 @@ from craftech_os.ingest import document
 from craftech_os.ingest.google import Google, GoogleError, status
 
 UNCLASSIFIED = "SIN_CLASIFICAR"
-READ_ERRORS = (HttpError, GoogleError, OSError)
+READ_ERRORS = (
+    HttpError,
+    GoogleError,
+    OSError,
+    httplib2.HttpLib2Error,
+    httplib2.decode.DecodeRatioError,
+    httplib2.decode.DecodeLimitError,
+)
 
 
 class ImportFailed(Exception):

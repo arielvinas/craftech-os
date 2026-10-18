@@ -3,7 +3,9 @@
 import os
 import time
 
+import httplib2
 from google.oauth2 import service_account
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -13,6 +15,10 @@ SCOPES = [
 ]
 SPREADSHEET = "application/vnd.google-apps.spreadsheet"
 MAX_RETRIES = 6
+HTTP_TIMEOUT_S = 300
+# A tab's grid is JSON that gzip shrinks more than httplib2's default 100x ratio allows.
+# Google is the only peer, so the ratio check is off and the total size stays capped.
+DECODE_LIMIT_BYTES = 1 << 30
 TAB_PROPERTIES = "properties(sheetId,title,hidden,gridProperties(rowCount,columnCount))"
 CELL_FIELDS = (
     "effectiveValue,formattedValue,userEnteredValue,effectiveFormat(backgroundColor,numberFormat)"
@@ -46,9 +52,20 @@ class Google:
         if not path:
             raise GoogleError("GOOGLE_APPLICATION_CREDENTIALS is not set")
         creds = service_account.Credentials.from_service_account_file(path, scopes=SCOPES)
+
+        def http():
+            return AuthorizedHttp(
+                creds,
+                httplib2.Http(
+                    timeout=HTTP_TIMEOUT_S,
+                    decode_limit_ratio=0,
+                    decode_limit_hard=DECODE_LIMIT_BYTES,
+                ),
+            )
+
         return cls(
-            build("drive", "v3", credentials=creds, cache_discovery=False),
-            build("sheets", "v4", credentials=creds, cache_discovery=False),
+            build("drive", "v3", http=http(), cache_discovery=False),
+            build("sheets", "v4", http=http(), cache_discovery=False),
         )
 
     def _execute(self, call: str, request, on_retry):
