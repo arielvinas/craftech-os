@@ -1,5 +1,7 @@
 import shutil
+import threading
 
+import psycopg
 import pytest
 
 from craftech_os import cli, sources
@@ -87,6 +89,24 @@ def test_removed_tab_becomes_inactive_and_comes_back(db):
     assert _tabs(db) == [("A", "x", "CARGA", True), ("A", "y", "CARGA", True)]
 
 
+def test_removed_source_deactivates_all_its_tabs(db):
+    migrate(db)
+    sources.load(
+        db,
+        sources.parse("sources: [{title: A, tabs: {CARGA: [x]}}, {title: B, tabs: {CARGA: [y]}}]"),
+    )
+    sources.load(db, sources.parse("sources: [{title: A, tabs: {CARGA: [x]}}]"))
+    assert _tabs(db) == [("A", "x", "CARGA", True), ("B", "y", "CARGA", False)]
+    assert dict((t, c) for t, _, c in sources.summary(db)) == {"A": {"CARGA": 1}, "B": {}}
+
+
+def test_source_switched_to_all_tabs_takes_that_class(db):
+    migrate(db)
+    sources.load(db, sources.parse("sources: [{title: A, tabs: {CARGA: [x]}}]"))
+    sources.load(db, sources.parse("sources: [{title: A, all_tabs: DERIVADA}]"))
+    assert _tabs(db) == [("A", "x", "DERIVADA", True)]
+
+
 def test_all_tabs_source_keeps_tabs_registered_on_read(db):
     migrate(db)
     sources.load(db, sources.parse("sources: [{title: P, all_tabs: DERIVADA}]"))
@@ -120,6 +140,40 @@ def test_cli_reports_invalid_yaml_with_exit_code_1(db, monkeypatch, capsys, tmp_
     bad.write_text("sources: [{title: A, all_tabs: NOPE}]")
     assert cli.main(["sources", "load", "--file", str(bad)]) == 1
     assert "unknown class 'NOPE'" in capsys.readouterr().err
+
+
+def test_concurrent_migrate_on_empty_database_both_succeed(db):
+    dsn = db.info.dsn + " password=" + (db.info.password or "")
+    barrier = threading.Barrier(2)
+    results, errors = [], []
+
+    def run():
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            barrier.wait()
+            try:
+                results.append(migrate(conn))
+            except Exception as e:
+                errors.append(e)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert sorted(results) == [[], ["0001_sources.sql"]]
+
+
+def test_cli_reports_unreadable_or_malformed_input_with_exit_code_1(monkeypatch, capsys, tmp_path):
+    bad = tmp_path / "sources.yaml"
+    bad.write_text("sources: [")
+    assert cli.main(["sources", "load", "--file", str(bad)]) == 1
+    assert "invalid YAML" in capsys.readouterr().err
+    assert cli.main(["sources", "load", "--file", str(tmp_path / "missing.yaml")]) == 1
+    assert "missing.yaml" in capsys.readouterr().err
+    monkeypatch.setenv("DATABASE_URL", "garbage")
+    with pytest.raises(SystemExit, match="DATABASE_URL is not a valid connection string"):
+        cli.main(["sources", "list"])
 
 
 def test_cli_without_database_url_fails(monkeypatch):

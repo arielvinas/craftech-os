@@ -11,6 +11,11 @@ def db():
     if not url:
         pytest.skip("TEST_DATABASE_URL is not set: skipping integration tests (see README.md)")
     with psycopg.connect(url, autocommit=True) as conn:
+        if not conn.info.dbname.endswith("_test"):
+            pytest.fail(
+                f"TEST_DATABASE_URL points at {conn.info.dbname!r}; its name must end in _test"
+                " because every test drops the public schema"
+            )
         conn.execute("DROP SCHEMA public CASCADE")
         conn.execute("CREATE SCHEMA public")
         yield conn

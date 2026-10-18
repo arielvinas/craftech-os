@@ -12,7 +12,10 @@ def _connect() -> psycopg.Connection:
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise SystemExit("error: DATABASE_URL is not set")
-    return psycopg.connect(url, autocommit=True)
+    try:
+        return psycopg.connect(url, autocommit=True)
+    except psycopg.ProgrammingError:
+        raise SystemExit("error: DATABASE_URL is not a valid connection string") from None
 
 
 def cmd_migrate(args) -> None:
@@ -57,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         args.func(args)
-    except (migrate.MigrationError, sources.SourcesError, psycopg.OperationalError) as e:
+    except (migrate.MigrationError, sources.SourcesError, psycopg.OperationalError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0

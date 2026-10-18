@@ -25,7 +25,10 @@ def _class(value, what: str) -> str:
 
 def parse(text: str) -> list[dict]:
     """Validate sources.yaml. Returns [{title, default_class, tabs: [(name, class)]}]."""
-    data = yaml.safe_load(text)
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise SourcesError(f"invalid YAML: {e}") from e
     if (
         not isinstance(data, dict)
         or set(data) != {"sources"}
@@ -69,7 +72,11 @@ def parse(text: str) -> list[dict]:
 
 
 def load(conn: psycopg.Connection, sources: list[dict]) -> None:
-    """Upsert sources and tabs; tabs no longer listed become inactive, never deleted."""
+    """Upsert sources and tabs; tabs no longer listed become inactive, never deleted.
+
+    A source missing from the list keeps its row but all its tabs become inactive.
+    An all_tabs source gives its class to every tab it has.
+    """
     with conn.transaction():
         for s in sources:
             (source_id,) = conn.execute(
@@ -95,6 +102,16 @@ def load(conn: psycopg.Connection, sources: list[dict]) -> None:
                     " WHERE source_id = %s AND active AND NOT (name = ANY(%s))",
                     (source_id, [name for name, _ in s["tabs"]]),
                 )
+            else:
+                conn.execute(
+                    "UPDATE source_tab SET class = %s WHERE source_id = %s AND class <> %s",
+                    (s["default_class"], source_id, s["default_class"]),
+                )
+        conn.execute(
+            "UPDATE source_tab SET active = false WHERE active AND source_id IN"
+            " (SELECT id FROM source WHERE NOT (title = ANY(%s)))",
+            ([s["title"] for s in sources],),
+        )
 
 
 def summary(conn: psycopg.Connection) -> list[tuple[str, str | None, dict[str, int]]]:

@@ -45,23 +45,25 @@ def sha256(path: Path) -> str:
 def migrate(conn: psycopg.Connection, directory: Path = MIGRATIONS_DIR) -> list[str]:
     """Apply pending migrations in order, one transaction each. Returns the names applied."""
     files = migration_files(directory)
-    with conn.transaction():
-        conn.execute(BOOTSTRAP)
-    applied = dict(conn.execute("SELECT name, sha256 FROM schema_migration").fetchall())
-    for f in files:
-        if f.name in applied and applied[f.name] != sha256(f):
-            raise MigrationError(f"migration {f.name} changed after it was applied")
-    done = []
-    for f in files:
-        if f.name in applied:
-            continue
+    conn.execute("SELECT pg_advisory_lock(hashtext('craftech_os.migrate'))")
+    try:
         with conn.transaction():
-            conn.execute("LOCK TABLE schema_migration IN EXCLUSIVE MODE")
-            if conn.execute("SELECT 1 FROM schema_migration WHERE name = %s", (f.name,)).fetchone():
+            conn.execute(BOOTSTRAP)
+        applied = dict(conn.execute("SELECT name, sha256 FROM schema_migration").fetchall())
+        for f in files:
+            if f.name in applied and applied[f.name] != sha256(f):
+                raise MigrationError(f"migration {f.name} changed after it was applied")
+        done = []
+        for f in files:
+            if f.name in applied:
                 continue
-            conn.execute(f.read_text())
-            conn.execute(
-                "INSERT INTO schema_migration (name, sha256) VALUES (%s, %s)", (f.name, sha256(f))
-            )
-        done.append(f.name)
-    return done
+            with conn.transaction():
+                conn.execute(f.read_text())
+                conn.execute(
+                    "INSERT INTO schema_migration (name, sha256) VALUES (%s, %s)",
+                    (f.name, sha256(f)),
+                )
+            done.append(f.name)
+        return done
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(hashtext('craftech_os.migrate'))")
