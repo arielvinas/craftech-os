@@ -23,10 +23,28 @@ def _class(value, what: str) -> str:
     return value
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys instead of keeping the last one."""
+
+
+def _unique_mapping(loader, node, deep=False):
+    mapping = loader.construct_mapping(node, deep=deep)
+    seen = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise SourcesError(f"duplicated key {key!r} at line {key_node.start_mark.line + 1}")
+        seen.add(key)
+    return mapping
+
+
+_UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping)
+
+
 def parse(text: str) -> list[dict]:
     """Validate sources.yaml. Returns [{title, default_class, tabs: [(name, class)]}]."""
     try:
-        data = yaml.safe_load(text)
+        data = yaml.load(text, Loader=_UniqueKeyLoader)
     except yaml.YAMLError as e:
         raise SourcesError(f"invalid YAML: {e}") from e
     if (

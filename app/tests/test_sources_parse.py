@@ -52,6 +52,8 @@ def test_all_tabs_entry():
         ("sources: [{title: A, tabs: {CARGA: [1]}}]", "tab must be a non-empty string"),
         ("sources: [{title: A, tabs: {CARGA: [x], IGNORAR: [x]}}]", "duplicated tab 'x'"),
         ("sources: [{title: A, all_tabs: CARGA}, {title: A, all_tabs: CARGA}]", "duplicated"),
+        ("sources: [{title: A, tabs: {CARGA: [x], CARGA: [y]}}]", "duplicated key 'CARGA'"),
+        ("sources: [{title: A, title: B, all_tabs: CARGA}]", "duplicated key 'title'"),
     ],
 )
 def test_invalid_files_are_rejected(text, message):
