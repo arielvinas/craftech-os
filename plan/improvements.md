@@ -25,3 +25,4 @@
 - [ ] [test-coverage] Ningún test detecta quitar el nullif de valor en mcp.celdas (celdas solo con color) — QA T-008 r1 (F1)
 - [ ] [test-coverage] Sin test de desempate por id cuando dos lecturas de la misma pestaña tienen el mismo read_at en mcp.celdas — QA T-008 r1 (F2)
 - [ ] [validation] clients load-zoho aborta con error interno ante un plazo 'Net 99999999999' sin indicar la fila; debería rechazar la fila con mensaje claro — QA T-009 r1 (F1)
+- [ ] [idempotency] clients load-zoho: filas del mismo export que chocan (razón social igual salvo mayúsculas, o tax ID compartido) se pisan en cada corrida y una reemplaza a la otra sin aviso — QA T-009 r1 (F2)
