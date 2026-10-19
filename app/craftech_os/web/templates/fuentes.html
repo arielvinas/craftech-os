@@ -8,7 +8,7 @@
   <h2>Salud del sistema</h2>
   <table class="detail">
     <tr><th>Última vuelta del worker</th><td>{{ health.last_tick | when }}</td></tr>
-    <tr><th>Intervalo máximo entre vueltas (últimas 24 horas)</th><td>{{ health.max_gap or "—" }}</td></tr>
+    <tr><th>Intervalo máximo entre vueltas (últimas 24 horas)</th><td>{{ health.max_gap | duration }}</td></tr>
     <tr><th>Último dump</th><td>
       {% if health.last_dump %}{{ health.last_dump | when }}, {{ "{:,}".format(health.dump_bytes or 0) }} bytes{% else %}ninguno{% endif %}
       {% if health.dump_stale %}<strong class="warning">Aviso: no hay un dump de las últimas 48 horas.</strong>{% endif %}

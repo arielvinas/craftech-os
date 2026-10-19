@@ -71,7 +71,7 @@ def _seed(db) -> dict:
     db.execute(
         "INSERT INTO system_event (kind, occurred_at)"
         " VALUES ('worker_tick', %s), ('worker_tick', %s)",
-        (NOW - timedelta(minutes=37), NOW - timedelta(minutes=2)),
+        (NOW - timedelta(minutes=37, milliseconds=250), NOW - timedelta(minutes=2)),
     )
     return ids
 
@@ -217,7 +217,7 @@ def test_fuentes_warns_when_the_dump_is_missing_or_old(db, client):
     ids = _seed(db)
     html = client.get("/fuentes").text
     assert "Planilla Ficticia A" in html and "Cobros" in html and "CARGA" in html
-    assert "0:35:00" in html  # the 35 minutes between the two seeded ticks
+    assert "<td>0:35:00</td>" in html  # the 35 minutes between the two seeded ticks
     assert "no hay un dump de las últimas 48 horas" in html
     db.execute(
         "INSERT INTO system_event (kind, occurred_at, details)"

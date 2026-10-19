@@ -7,7 +7,7 @@ server; filters are GET forms validated against closed lists before reaching the
 import json
 import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import jinja2
@@ -49,6 +49,9 @@ env = jinja2.Environment(
     undefined=jinja2.StrictUndefined,
 )
 env.filters["when"] = lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S") if dt else "—"
+env.filters["duration"] = lambda td: (
+    str(td - timedelta(microseconds=td.microseconds)) if td else "—"
+)
 env.filters["pretty_json"] = lambda v: json.dumps(v, ensure_ascii=False, indent=2)
 env.tests["hex_color"] = lambda v: bool(v and HEX_COLOR.match(v))
 templates = Jinja2Templates(env=env)
