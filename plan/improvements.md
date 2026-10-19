@@ -15,3 +15,4 @@
 - [ ] [test-coverage] El corrimiento de referencias a filas vacías debajo de los datos no tiene test — QA T-004 r2 (hallazgo 3, nit)
 - [ ] Tests: StarletteDeprecationWarning de TestClient sobre httpx; revisar al subir Starlette (T-006)
 - [ ] [test-coverage] Filtro clave (escape de %, _ y \) y fecha 'hasta' inclusiva de /cambios sin test (mutantes sobreviven) — QA T-006 r1 (minor)
+- [ ] [nit] Variable now pasada a la plantilla y no usada; enlace de paginación /cambios?&pagina=2 sin filtros; falta meta viewport — QA T-006 r1 (nits)
