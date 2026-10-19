@@ -19,4 +19,6 @@ def db():
         conn.execute("DROP SCHEMA IF EXISTS mcp CASCADE")
         conn.execute("DROP SCHEMA public CASCADE")
         conn.execute("CREATE SCHEMA public")
+        # As in a fresh database, so the MCP role tests meet the table privileges.
+        conn.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
         yield conn
