@@ -274,12 +274,14 @@ def test_issue_status_follows_its_last_resolution(db, env, fake):
         return _issues(db, "color_desconocido")[0][2]
 
     db.execute(
-        "INSERT INTO issue_resolution (issue_id, action, author) VALUES (%s, 'ignorado', 'test')",
+        "INSERT INTO issue_resolution (issue_id, action, author, reason)"
+        " VALUES (%s, 'ignorado', 'test', 'test')",
         (issue_id,),
     )
     assert reread_with("11") == "ignorado"
     db.execute(
-        "INSERT INTO issue_resolution (issue_id, action, author) VALUES (%s, 'resuelto', 'test')",
+        "INSERT INTO issue_resolution (issue_id, action, author, reason)"
+        " VALUES (%s, 'resuelto', 'test', 'test')",
         (issue_id,),
     )
     assert _issues(db, "color_desconocido")[0][2] == "resuelto"
