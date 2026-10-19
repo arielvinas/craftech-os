@@ -72,13 +72,13 @@ Verificado en el repo el 19-oct-2026:
 
 ## Acceptance criteria
 
-- [ ] `craftech-os migrate` aplica `0008` sobre una base con la etapa A, y `SELECT * FROM legal_entity` devuelve exactamente Craftech S.A. y Craftech-io Inc.
-- [ ] Con un CSV inventado de contactos de Zoho, `clients load-zoho` crea los clientes y razones sociales esperados. Una segunda corrida informa 0 creados. El log muestra solo cantidades.
-- [ ] Con un CSV inventado de aliases, `aliases load` crea los alias. Una segunda decisión para el mismo texto cambia lo que muestra `mcp.aliases` sin borrar la anterior.
-- [ ] Desde Claude Desktop, o con el rol `mcp_reader` en psql, `mcp.clientes`, `mcp.razones_sociales` y `mcp.aliases` se leen y aparecen en `craftech://catalogo` con sus comentarios.
-- [ ] `mcp_writer` puede hacer INSERT en `client` y `client_alias` (queda un registro de auditoría) y recibe error de permisos en UPDATE y DELETE.
+- [x] `craftech-os migrate` aplica `0008` sobre una base con la etapa A, y `SELECT * FROM legal_entity` devuelve exactamente Craftech S.A. y Craftech-io Inc.
+- [x] Con un CSV inventado de contactos de Zoho, `clients load-zoho` crea los clientes y razones sociales esperados. Una segunda corrida informa 0 creados. El log muestra solo cantidades.
+- [x] Con un CSV inventado de aliases, `aliases load` crea los alias. Una segunda decisión para el mismo texto cambia lo que muestra `mcp.aliases` sin borrar la anterior.
+- [x] Desde Claude Desktop, o con el rol `mcp_reader` en psql, `mcp.clientes`, `mcp.razones_sociales` y `mcp.aliases` se leen y aparecen en `craftech://catalogo` con sus comentarios.
+- [x] `mcp_writer` puede hacer INSERT en `client` y `client_alias` (queda un registro de auditoría) y recibe error de permisos en UPDATE y DELETE.
 - [ ] En la planilla de prueba de Ariel, una celda vacía pintada en una pestaña con esquema aparece en la lectura siguiente con su color, y un color fuera de la lista abre `color_desconocido`.
-- [ ] Ningún nombre real, tax ID ni archivo de `craftech-os-data` entra al repo, los tests o los logs.
+- [x] Ningún nombre real, tax ID ni archivo de `craftech-os-data` entra al repo, los tests o los logs.
 
 ## Out of scope
 
@@ -87,8 +87,69 @@ Verificado en el repo el 19-oct-2026:
 - Sincronizar con HubSpot o leer Zoho por API.
 - Resolver la pregunta R32 de Emi sobre múltiples razones sociales: se modela de 1 a n igual.
 
+## Implementation
+
+- **Celdas con solo color** (commit `d3a9de9`).
+  - `document.build(grid, keep_color_only)` guarda como `{c, bg}` las celdas vacías pintadas de un color distinto de blanco.
+  - `importer.read_tab` lo activa solo para pestañas CARGA con esquema.
+  - `diff/compare.py` no alinea, inserta ni borra filas hechas solo de celdas pintadas. Sin esto, pintar una fila vacía daría un `row_inserted`.
+  - `issues/detect.py` ya toleraba celdas sin `value`, así que `color_desconocido` ve los colores nuevos.
+- **Migración `0008_clients.sql`.**
+  - `legal_entity` tiene `billing_system` único (`bejerman` para Craftech S.A., `zoho` para Craftech-io Inc.).
+  - `client_legal_entity.source_system` es una clave foránea a esa columna. Eso cumple el CHECK de valores y además dice qué sociedad de Craftech factura.
+  - Índice único parcial `(source_system, tax_id)`.
+  - `client_alias` solo recibe inserts y exige autor y motivo no vacíos.
+  - Vistas `mcp.clientes`, `mcp.razones_sociales` y `mcp.aliases`, con la decisión vigente por fuente y texto (`ORDER BY created_at DESC, id DESC`) y `decisiones_anteriores`. Cada vista tiene su `GRANT SELECT` y todas las columnas comentadas.
+  - `record_mcp_write()` se reemplaza para leer el autor con `to_jsonb(NEW)->>'author'`: `client` no tiene autor, así que su evento lleva la herramienta y el autor nulo.
+  - Triggers con la herramienta `vincular_alias` en `client` y `client_alias`, y `GRANT INSERT` a `mcp_writer`. Las columnas identity no necesitan permiso sobre la secuencia; el test lo prueba.
+- **`app/craftech_os/clients.py`.**
+  - `load_zoho` y `load_aliases`, cada uno en una sola transacción.
+  - Los encabezados se comparan normalizados con `diff.compare.normalize`, la misma función de `row_key`. El CSV se lee como `utf-8-sig` porque Zoho exporta con BOM.
+  - Zoho:
+    - La clave es el tax ID y, si no hay, la razón social normalizada.
+    - Una fila igual a lo guardado cuenta como salteada; una distinta, como actualizada. Una fila sin nombre se saltea.
+    - "Net N" son N días y "Due on Receipt" es 0. Cualquier otro plazo (vacío, "Custom") queda en 10: no se interpreta.
+  - Aliases:
+    - El texto se guarda normalizado.
+    - El cliente se busca por nombre de fantasía o por razón social, normalizados; si no hay, se crea con el nombre dado.
+    - Se saltea una decisión idéntica a una ya guardada.
+    - Una fila sin algún campo frena toda la carga, con el número de línea y sin el contenido.
+- **CLI.** `clients load-zoho <csv>` y `aliases load <csv>` imprimen y registran (`clients_loaded`, `aliases_loaded`) solo cantidades. `ClientsError` sale como `error:` con código 1.
+- **README.** Nueva sección "Clientes y aliases": cómo montar `~/repos/craftech-os-data/` de solo lectura con `docker compose run -v` y las reglas de carga. También se actualizó la lista de tablas de `mcp_writer`.
+
+## Test plan
+
+- `tests/test_clients.py` (siete tests):
+  - la siembra de `legal_entity`;
+  - la carga de Zoho crea y luego saltea todo, y ni la salida ni los eventos contienen nombres ni tax IDs;
+  - una actualización por tax ID y por razón social;
+  - la carga de aliases es idempotente y crea el cliente que falta;
+  - la decisión más reciente manda y la anterior queda contada;
+  - una fila sin motivo no carga nada;
+  - un CSV sin columnas falla.
+- `tests/test_mcp.py`:
+  - `mcp_writer` inserta en `client` y `client_alias` y quedan dos eventos `mcp_write`;
+  - UPDATE y DELETE en `client` y `client_alias`, y cualquier escritura en `client_legal_entity`, dan `InsufficientPrivilege`;
+  - `mcp_reader` lee las tres vistas, y el catálogo las lista con comentarios en todas sus columnas.
+- `tests/test_document.py` y `tests/test_diff_store.py`:
+  - una celda pintada se conserva solo en CARGA con esquema y abre `color_desconocido`;
+  - una fila solo pintada no genera cambios.
+- `tests/test_db.py`: las tablas y migraciones nuevas.
+- Mutaciones, cada una pone la suite en rojo:
+  - ordenar los aliases de forma ascendente;
+  - apagar `keep_color_only`;
+  - no saltear las decisiones repetidas.
+- Prueba de humo: el CLI real contra la base de prueba con CSVs inventados en `/tmp`, dos corridas de cada carga y un archivo que no existe.
+- **Alcance del cambio:**
+  - El reemplazo de `record_mcp_write()` toca la auditoría de las tres herramientas existentes; sus tests siguen en verde.
+  - El hash de las pestañas CARGA con esquema cambia una vez en la primera lectura después del deploy, y eso no genera cambios espurios.
+  - Las demás pestañas no cambian.
+
 ## Post-merge
 
 1. Ariel exporta a `~/repos/craftech-os-data/` el `Contacts.csv` de Zoho Books y el CSV con las 51 decisiones del artefacto de Aliases.
 2. `craftech-os clients load-zoho ~/repos/craftech-os-data/Contacts.csv` y `craftech-os aliases load ~/repos/craftech-os-data/aliases.csv`. Verificar con las cantidades que informan, y con `SELECT count(*)` en `mcp.clientes` y `mcp.aliases`.
 3. Si los encabezados reales del CSV de Zoho difieren de los supuestos, ajustar el mapeo en un commit chico antes de cargar.
+4. Los comandos corren en el contenedor con la carpeta montada: `docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app craftech-os clients load-zoho /data/Contacts.csv` (ver la sección "Clientes y aliases" del README).
+5. Cargar Zoho antes que los aliases. Zoho nombra cada cliente con su Display Name, que es la razón social. En el CSV de aliases, la columna `cliente` tiene que coincidir, normalizada, con esa razón social o con un nombre ya cargado. Si trae un nombre de fantasía distinto, se crea un cliente aparte. Revisar `mcp.clientes` después de la carga: si hay duplicados, hace falta decidir cómo unir el nombre de fantasía con la razón social.
+6. Criterio pendiente: en la planilla de prueba, pintar una celda vacía en una pestaña con esquema y verificar en la lectura siguiente su color en `mcp.celdas`. Un color fuera de la lista tiene que abrir `color_desconocido`.
