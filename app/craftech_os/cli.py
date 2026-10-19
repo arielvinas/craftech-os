@@ -230,6 +230,12 @@ def cmd_web(args) -> None:
     uvicorn.run("craftech_os.web.app:app", host=args.host, port=args.port)
 
 
+def cmd_mcp(args) -> None:
+    from craftech_os.mcp import server
+
+    server.main()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="craftech-os")
     commands = parser.add_subparsers(required=True)
@@ -289,6 +295,9 @@ def main(argv: list[str] | None = None) -> int:
     web_cmd.add_argument("--host", default="127.0.0.1", help="0.0.0.0 inside the container")
     web_cmd.add_argument("--port", type=int, default=8000)
     web_cmd.set_defaults(func=cmd_web)
+    commands.add_parser(
+        "mcp", help="serve the MCP server for Claude Desktop over stdio"
+    ).set_defaults(func=cmd_mcp)
     args = parser.parse_args(argv)
     try:
         args.func(args)
