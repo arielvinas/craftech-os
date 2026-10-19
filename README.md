@@ -63,6 +63,36 @@ La clave de la cuenta de servicio (`finance-bot-ingest`, solo lectura) vive en `
 
    Guarda una foto (`snapshot`) por pestaña, ocultas incluidas, salvo que el contenido sea idéntico a la última foto. Registra en `source_tab` el identificador de cada pestaña y las que Google tiene y el archivo no (como `SIN_CLASIFICAR`). Cada lectura, reintento y error queda en `system_event`, con identificadores y conteos, nunca valores. Al final imprime un resumen por planilla y las diez pestañas más lentas; si alguna lectura falló, termina con error.
 
+## Lectura continua (worker)
+
+```bash
+mkdir -p ~/.config/craftech-os/backups   # o la carpeta de BACKUPS_DIR en infra/.env
+docker compose -f infra/docker-compose.yml up -d    # postgres y worker
+docker compose -f infra/docker-compose.yml logs -f worker
+```
+
+Cada 5 minutos el worker pide a Drive el número de versión de cada planilla con `drive_id`. Si cambió desde la última lectura completa, espera a que pasen 2 minutos sin ediciones (consulta cada 30 segundos, como mucho 10 minutos) y lee solo las pestañas `CARGA` y `DERIVADA`; guarda una foto solo de las que cambiaron. Las demás clases se releen a mano con `craftech-os import --source "<título>"`. Cada vuelta imprime una línea con planillas chequeadas, leídas y fotos nuevas, y deja en `system_event` los eventos `worker_tick`, `version_changed`, `calm_wait`, `source_failed` y `api_retry`. Un error en una planilla no frena a las demás; un error no previsto termina el proceso y Compose lo reinicia.
+
+Para que lea una planilla en la próxima vuelta, sin esperar la calma y aunque su versión no haya cambiado:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app craftech-os read-now "<título>"
+```
+
+### Dump diario
+
+En la primera vuelta después de las 03:00 (hora de Buenos Aires), o si no hay un dump de las últimas 24 horas, el worker corre `pg_dump` hacia `BACKUPS_DIR` (por defecto `~/.config/craftech-os/backups/`) con el nombre `craftech-os-AAAA-MM-DD.dump` y conserva los últimos 14. Cada dump deja un evento `dump` con tamaño y duración; si falla, un `dump_failed`, y el worker sigue. A mano:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app craftech-os dump
+```
+
+Para revisar el contenido de un dump:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app pg_restore --list /backups/craftech-os-AAAA-MM-DD.dump
+```
+
 ## Tests
 
 ```bash

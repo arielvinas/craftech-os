@@ -16,16 +16,38 @@ services:
       timeout: 5s
       retries: 30
 
+  # One-off commands: docker compose run --rm app craftech-os <command>. Not started by `up`.
   app:
+    profiles: ["cli"]
     build:
       context: ..
       dockerfile: infra/Dockerfile
     environment:
       DATABASE_URL: postgresql://craftech_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-sa.json
+      TZ: America/Argentina/Buenos_Aires
     volumes:
       # The service account key never enters the image: it is mounted read-only.
       - ${HOME}/.config/craftech-os/secrets/${GOOGLE_SA_KEY_FILE:?set GOOGLE_SA_KEY_FILE in infra/.env}:/run/secrets/google-sa.json:ro
+      - ${BACKUPS_DIR:-${HOME}/.config/craftech-os/backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["craftech-os", "worker"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://craftech_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-sa.json
+      # The daily dump runs after 03:00 local time and is named after the local date.
+      TZ: America/Argentina/Buenos_Aires
+    volumes:
+      - ${HOME}/.config/craftech-os/secrets/${GOOGLE_SA_KEY_FILE:?set GOOGLE_SA_KEY_FILE in infra/.env}:/run/secrets/google-sa.json:ro
+      - ${BACKUPS_DIR:-${HOME}/.config/craftech-os/backups}:/backups
     depends_on:
       postgres:
         condition: service_healthy

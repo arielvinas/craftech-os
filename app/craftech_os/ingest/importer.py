@@ -28,17 +28,17 @@ class ImportFailed(Exception):
     pass
 
 
-def _error(e: Exception) -> dict:
+def error_details(e: Exception) -> dict:
     details = {"error": type(e).__name__}
     if isinstance(e, HttpError):
         details["status"] = status(e)
     return details
 
 
-def _retry_logger(conn, source_id, source_tab_id=None):
+def retry_logger(conn, source_id, source_tab_id=None):
     def on_retry(**details):
         events.record(
-            conn, "google_retry", source_id=source_id, source_tab_id=source_tab_id, **details
+            conn, "api_retry", source_id=source_id, source_tab_id=source_tab_id, **details
         )
 
     return on_retry
@@ -106,7 +106,7 @@ def read_tab(
     Returns {duration_ms, stored}, or None if the read failed (a tab_failed event says why).
     """
     started = time.monotonic()
-    on_retry = _retry_logger(conn, source_id, tab_id)
+    on_retry = retry_logger(conn, source_id, tab_id)
     try:
         version = google.version(file_id, on_retry)
         drive_version, drive_modified_at = int(version["version"]), version["modifiedTime"]
@@ -114,7 +114,9 @@ def read_tab(
         doc = document.build(grid)
         serialized = document.canonical(doc)
     except (*READ_ERRORS, KeyError, ValueError, TypeError) as e:
-        events.record(conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **_error(e))
+        events.record(
+            conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **error_details(e)
+        )
         return None
     duration_ms = round((time.monotonic() - started) * 1000)
     content_hash = document.content_hash(serialized)
@@ -147,7 +149,7 @@ def read_tab(
             )
         except psycopg.DataError as e:
             events.record(
-                conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **_error(e)
+                conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **error_details(e)
             )
             return None
     events.record(
@@ -162,8 +164,18 @@ def read_tab(
     return {"duration_ms": duration_ms, "stored": stored}
 
 
-def import_source(conn: psycopg.Connection, google: Google, source: dict) -> dict:
-    """Read every tab of one source. Returns counts and the duration of each tab read."""
+def import_source(
+    conn: psycopg.Connection,
+    google: Google,
+    source: dict,
+    classes: tuple[str, ...] | None = None,
+    drive_version: str | None = None,
+) -> dict:
+    """Read every tab of one source, or only its tabs of these classes.
+
+    Returns counts and the duration of each tab read. drive_version, when given, is recorded
+    in source_read if every tab was read: the worker reads it back as the version it has.
+    """
     (source_id,) = conn.execute(
         "SELECT id FROM source WHERE title = %s", (source["title"],)
     ).fetchone()
@@ -174,12 +186,22 @@ def import_source(conn: psycopg.Connection, google: Google, source: dict) -> dic
         return result
     started = time.monotonic()
     try:
-        google_tabs = google.tabs(source["drive_id"], _retry_logger(conn, source_id))
+        google_tabs = google.tabs(source["drive_id"], retry_logger(conn, source_id))
     except READ_ERRORS as e:
-        events.record(conn, "source_failed", source_id=source_id, **_error(e))
+        events.record(conn, "source_failed", source_id=source_id, **error_details(e))
         result["failed"] = 1
         return result
-    for tab_id, title in register_tabs(conn, source_id, source["default_class"], google_tabs):
+    found = register_tabs(conn, source_id, source["default_class"], google_tabs)
+    if classes is not None:
+        wanted = {
+            tab_id
+            for (tab_id,) in conn.execute(
+                "SELECT id FROM source_tab WHERE source_id = %s AND class = ANY(%s)",
+                (source_id, list(classes)),
+            )
+        }
+        found = [(tab_id, title) for tab_id, title in found if tab_id in wanted]
+    for tab_id, title in found:
         read = read_tab(conn, google, source_id, tab_id, source["drive_id"], title)
         if read is None:
             result["failed"] += 1
@@ -194,5 +216,6 @@ def import_source(conn: psycopg.Connection, google: Google, source: dict) -> dic
         stored=result["stored"],
         unchanged=result["unchanged"],
         failed=result["failed"],
+        **({"drive_version": drive_version} if drive_version and not result["failed"] else {}),
     )
     return result

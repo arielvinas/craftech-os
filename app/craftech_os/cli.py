@@ -6,7 +6,7 @@ from pathlib import Path
 import psycopg
 from googleapiclient.errors import HttpError
 
-from craftech_os import events, migrate, sources
+from craftech_os import events, migrate, sources, worker
 from craftech_os.ingest import importer
 from craftech_os.ingest.google import Google, GoogleError
 
@@ -54,7 +54,7 @@ def cmd_sources_resolve(args) -> None:
     with _connect() as conn:
 
         def on_retry(**details):
-            events.record(conn, "google_retry", **details)
+            events.record(conn, "api_retry", **details)
 
         found, errors = {}, []
         for title in pending:
@@ -96,6 +96,36 @@ def cmd_import(args) -> None:
         raise importer.ImportFailed(f"{failed} reads failed: see system_event")
 
 
+def cmd_read_now(args) -> None:
+    """Ask the worker to read this spreadsheet on its next tick, without the calm wait."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, drive_id FROM source WHERE title = %s", (args.title,)
+        ).fetchone()
+        if row is None:
+            raise sources.SourcesError(f"no source titled {args.title!r}")
+        if row[1] is None:
+            raise sources.SourcesError(f"{args.title!r} has no drive_id")
+        inserted = conn.execute(
+            "INSERT INTO read_request (source_id, requested_by) VALUES (%s, 'cli')"
+            " ON CONFLICT DO NOTHING",
+            (row[0],),
+        ).rowcount
+    print("read requested" if inserted else "already pending")
+
+
+def cmd_worker(args) -> None:
+    google = Google.from_environment()
+    with _connect() as conn:
+        worker.run(conn, google, os.environ["DATABASE_URL"], args.dir)
+
+
+def cmd_dump(args) -> None:
+    with _connect() as conn:
+        path = worker.dump(conn, os.environ["DATABASE_URL"], args.dir)
+    print(f"dumped {path}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="craftech-os")
     commands = parser.add_subparsers(required=True)
@@ -119,6 +149,17 @@ def main(argv: list[str] | None = None) -> int:
     import_cmd.add_argument("--source", help="only the spreadsheet with this exact title")
     import_cmd.add_argument("--file", type=Path, default=sources.SOURCES_FILE)
     import_cmd.set_defaults(func=cmd_import)
+    read_now_cmd = commands.add_parser(
+        "read-now", help="ask the worker to read a spreadsheet on its next tick"
+    )
+    read_now_cmd.add_argument("title", help="the exact title in sources.yaml")
+    read_now_cmd.set_defaults(func=cmd_read_now)
+    worker_cmd = commands.add_parser("worker", help="read changed spreadsheets every five minutes")
+    worker_cmd.add_argument("--dir", type=Path, default=worker.BACKUPS_DIR, help="for the dumps")
+    worker_cmd.set_defaults(func=cmd_worker)
+    dump_cmd = commands.add_parser("dump", help="pg_dump the database now")
+    dump_cmd.add_argument("--dir", type=Path, default=worker.BACKUPS_DIR)
+    dump_cmd.set_defaults(func=cmd_dump)
     args = parser.parse_args(argv)
     try:
         args.func(args)
@@ -126,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
         migrate.MigrationError,
         sources.SourcesError,
         importer.ImportFailed,
+        worker.DumpFailed,
         GoogleError,
         psycopg.OperationalError,
         OSError,

@@ -7,8 +7,8 @@ import pytest
 from craftech_os import cli, sources
 from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 
-TABLES = ["schema_migration", "snapshot", "source", "source_tab", "system_event"]
-MIGRATIONS = ["0001_sources.sql", "0002_snapshot.sql"]
+TABLES = ["read_request", "schema_migration", "snapshot", "source", "source_tab", "system_event"]
+MIGRATIONS = ["0001_sources.sql", "0002_snapshot.sql", "0003_read_request.sql"]
 
 
 def test_migrate_creates_tables_and_is_idempotent(db):
