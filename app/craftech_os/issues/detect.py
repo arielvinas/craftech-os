@@ -38,6 +38,9 @@ def find(doc: dict, schema: dict | None) -> list[tuple[str, str, dict]]:
                     colors.setdefault(cell["bg"], []).append(ref)
                 if "stringValue" in (cell.get("value") or {}) and (value(cell) or "").strip():
                     where = row["key"] or f"fila {row['r'] + 1}"
+                    if row["ordinal"] and row["ordinal"] > 1:
+                        # Rule R26: a repeated key is another series of the same client.
+                        where += f" ({row['ordinal']})"
                     column = value(header.get(c)) or column_letters(c)
                     found.append(("valor_ilegible", f"{where}:{column}", {"cell_ref": ref}))
     found += [

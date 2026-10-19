@@ -226,6 +226,18 @@ def test_text_in_the_month_grid_is_an_unreadable_value(db, env, fake):
     ]
 
 
+def test_unreadable_values_of_two_rows_with_the_same_key_are_two_problems(db, env, fake):
+    rows = [list(r) for r in BASE[:5] + [["Cliente A", "1", "2", "3"]] + BASE[5:]]
+    rows[3][2] = "814,8"
+    rows[5][2] = "n/d"
+    _set(fake, rows)
+    assert _import(env) == 0
+    assert sorted(key for key, _, _ in _issues(db, "valor_ilegible")) == [
+        f"{_tab_id(db)}:cliente a (2):feb",
+        f"{_tab_id(db)}:cliente a:feb",
+    ]
+
+
 def test_a_third_repeated_key_is_an_ambiguous_alignment(db, env, fake):
     two = BASE[:5] + [["Cliente A", "1", "2", "3"]] + BASE[5:]
     _set(fake, two)

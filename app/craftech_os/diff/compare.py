@@ -8,11 +8,19 @@ ambiguous it is not guessed: its rows are compared by position and the key is re
 import json
 import re
 import unicodedata
+from bisect import bisect_left
 from collections import Counter
+from collections.abc import Callable
 from difflib import SequenceMatcher
 
 BEFORE_HEADER = "(antes del encabezado)"
 COLUMN = re.compile(r"^[A-Z]{1,3}$")
+CELL = r"\$?[A-Z]{1,3}\$?[0-9]+"
+# A quoted string, or a cell or range reference with its optional sheet prefix.
+REFERENCE = re.compile(
+    rf"""("[^"]*")|(?<![\w.$])((?:'[^']*'|[\w.]+)!)?({CELL}(?::{CELL})?)(?![\w(])"""
+)
+CELL_PARTS = re.compile(r"(\$?)([A-Z]{1,3})(\$?)([0-9]+)")
 
 
 def normalize(text: str) -> str:
@@ -75,8 +83,14 @@ def _change(change_type: str, **fields) -> dict:
     return change
 
 
-def cell_changes(old: dict | None, new: dict | None, ref: str | None, **row) -> list[dict]:
-    """Changes of one aligned cell. Values are compared as shown, so float noise is ignored."""
+def cell_changes(
+    old: dict | None, new: dict | None, ref: str | None, moved=lambda formula: formula, **row
+) -> list[dict]:
+    """Changes of one aligned cell. Values are compared as shown, so float noise is ignored.
+
+    moved rewrites the old formula as Google would after the rows and columns that were
+    inserted or deleted, so a shifted reference is not a change.
+    """
     ov, nv = value(old), value(new)
     of = old.get("formula") if old else None
     nf = new.get("formula") if new else None
@@ -105,7 +119,7 @@ def cell_changes(old: dict | None, new: dict | None, ref: str | None, **row) -> 
             )
         )
     else:
-        if of != nf:
+        if (moved(of) if of is not None else None) != nf:
             out.append(_change("formula", cell_ref=ref, old_formula=of, new_formula=nf, **row))
         if ov != nv:
             out.append(_change("value", cell_ref=ref, old_value=ov, new_value=nv, **row))
@@ -183,7 +197,12 @@ def _columns(old_header: dict, new_header: dict, width: int):
     return mapping, inserted
 
 
-def _align(old_rows: list[dict], new_rows: list[dict]):
+def _content(row: dict, key_c: int) -> tuple:
+    """What a row shows besides its key, ignoring columns."""
+    return tuple(sorted(v for c, cell in row["cells"].items() if c != key_c and (v := value(cell))))
+
+
+def _align(old_rows: list[dict], new_rows: list[dict], key_c: int):
     """Pair the rows of one block. Returns (pairs, moved, ambiguous keys).
 
     pairs are (old, new) with None on the missing side; moved holds the ids of new rows whose
@@ -245,12 +264,49 @@ def _align(old_rows: list[dict], new_rows: list[dict]):
         pairs += [(None, row) for row in new_pos[paired:]]
         if a is not None:
             pairs.append((by_anchor[a], next(row for row in new_rows if anchor(row) == a)))
-    if leftovers_old and leftovers_new:
-        # A key gone here and a new key there: maybe one row changed key and place at once.
+    gone = {_content(row, key_c) for row in leftovers_old} - {()}
+    if any(_content(row, key_c) in gone for row in leftovers_new):
+        # A key gone here and a new key with the same content there: maybe one row changed
+        # key and place at once.
         ambiguous |= {row["key"] for row in leftovers_old + leftovers_new}
     pairs += [(row, None) for row in leftovers_old]
     pairs += [(None, row) for row in leftovers_new]
     return pairs, moved, ambiguous
+
+
+def _shift(exact: dict[int, int], anchors: dict[int, int], present) -> Callable[[int], int]:
+    """Old index -> new index of a row or column, for references in formulas.
+
+    exact holds every aligned index; anchors the ones that kept their order. An index with no
+    pair lands where Google puts it: just before the next anchor, counting the empty indexes
+    in between (a deleted one takes the place of the next survivor).
+    """
+    olds = sorted(anchors)
+
+    def move(x: int) -> int:
+        if x in exact:
+            return exact[x]
+        i = bisect_left(olds, x)
+        if i == len(olds):
+            return x + (anchors[olds[-1]] - olds[-1] if olds else 0)
+        return anchors[olds[i]] - sum(1 for y in range(x, olds[i]) if y not in present)
+
+    return move
+
+
+def _moved_formula(move_row, move_column):
+    def cell(m: re.Match) -> str:
+        col_abs, letters, row_abs, number = m.groups()
+        c = move_column(column_index(letters))
+        return f"{col_abs}{column_letters(c)}{row_abs}{move_row(int(number) - 1) + 1}"
+
+    def reference(m: re.Match) -> str:
+        if m.group(1) or m.group(2):
+            # A text, or a reference to another tab: Google leaves it as it was.
+            return m.group(0)
+        return CELL_PARTS.sub(cell, m.group(0))
+
+    return lambda formula: REFERENCE.sub(reference, formula)
 
 
 def _row_fields(block: str, row: dict) -> dict:
@@ -281,39 +337,50 @@ def _schema_changes(old_doc: dict, new_doc: dict, schema: dict):
         for c in inserted
         if value(new_header.get(c)) is not None
     ]
-    ambiguous = []
+    ambiguous, aligned = [], []
     old_by_name, new_by_name = dict(old_blocks), dict(new_blocks)
     for name in [n for n, _ in old_blocks] + [n for n, _ in new_blocks if n not in old_by_name]:
-        pairs, moved, keys = _align(old_by_name.get(name, []), new_by_name.get(name, []))
+        pairs, moved, keys = _align(
+            old_by_name.get(name, []), new_by_name.get(name, []), column_index(schema["key"])
+        )
         ambiguous += [(name, key) for key in sorted(keys)]
-        for old, new in pairs:
-            if new is None:
-                changes.append(
-                    _change("row_deleted", old_value=str(old["r"] + 1), **_row_fields(name, old))
+        aligned += [(name, old, new, id(new) in moved) for old, new in pairs]
+    rows = {old["r"]: new["r"] for _, old, new, _ in aligned if old and new}
+    in_place = {old["r"]: new["r"] for _, old, new, m in aligned if old and new and not m}
+    present = {row["r"] for row in old_doc["rows"]}
+    moved_formula = _moved_formula(
+        _shift(rows, in_place, present), _shift(columns, columns, range(width))
+    )
+    for name, old, new, is_moved in aligned:
+        if new is None:
+            changes.append(
+                _change("row_deleted", old_value=str(old["r"] + 1), **_row_fields(name, old))
+            )
+            continue
+        fields = _row_fields(name, new)
+        if old is None:
+            changes.append(_change("row_inserted", new_value=str(new["r"] + 1), **fields))
+            continue
+        if is_moved:
+            changes.append(
+                _change(
+                    "row_moved",
+                    old_value=str(old["r"] + 1),
+                    new_value=str(new["r"] + 1),
+                    **fields,
                 )
-                continue
-            fields = _row_fields(name, new)
-            if old is None:
-                changes.append(_change("row_inserted", new_value=str(new["r"] + 1), **fields))
-                continue
-            if id(new) in moved:
-                changes.append(
-                    _change(
-                        "row_moved",
-                        old_value=str(old["r"] + 1),
-                        new_value=str(new["r"] + 1),
-                        **fields,
-                    )
-                )
-            targets = {columns[c] for c in old["cells"] if c in columns}
-            targets |= {c for c in new["cells"] if c in inverse}
-            for c in sorted(targets):
-                old_cell = old["cells"].get(inverse[c])
-                changes += cell_changes(old_cell, new["cells"].get(c), a1(new["r"], c), **fields)
-            for c, cell in old["cells"].items():
-                if c not in columns:
-                    # Its column is gone: the cell has no place in the new version.
-                    changes += cell_changes(cell, None, None, **_row_fields(name, old))
+            )
+        targets = {columns[c] for c in old["cells"] if c in columns}
+        targets |= {c for c in new["cells"] if c in inverse}
+        for c in sorted(targets):
+            old_cell = old["cells"].get(inverse[c])
+            changes += cell_changes(
+                old_cell, new["cells"].get(c), a1(new["r"], c), moved_formula, **fields
+            )
+        for c, cell in old["cells"].items():
+            if c not in columns:
+                # Its column is gone: the cell has no place in the new version.
+                changes += cell_changes(cell, None, None, **_row_fields(name, old))
     return changes, ambiguous
 
 

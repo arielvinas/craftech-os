@@ -251,3 +251,73 @@ def test_a_schema_whose_header_is_gone_falls_back_to_positions():
     result = compare(_doc(*BASE), _doc(*new), SCHEMA)
     assert result["positional"] is True
     assert _types(result) == ["value"]
+
+
+def _with_formulas(rows):
+    """Column D of each client row is =B+C of its own row."""
+    doc = _doc(*rows)
+    for row in doc["rows"]:
+        if normalize(row["cells"][0]["text"]).startswith("cliente "):
+            _cell_at(doc, row["r"], 3)["formula"] = f"=B{row['r'] + 1}+$C${row['r'] + 1}"
+    return doc
+
+
+def _total(doc, r, own, other):
+    """The total row sums the clients of this tab and of another one."""
+    _cell_at(doc, r, 1)["formula"] = f"=SUM(B{own})"
+    _cell_at(doc, r, 2)["formula"] = f"=SUM('Otra pestaña'!C{other})+ROUND(1.5,0)"
+
+
+def test_a_row_inserted_above_formulas_does_not_change_them():
+    new = BASE[:3] + [["Cliente C", "1", "2", "3"]] + BASE[3:]
+    old_doc, new_doc = _with_formulas(BASE), _with_formulas(new)
+    _total(old_doc, 5, "4:B5", "4:C5")
+    # Google shifts the references of this tab, not those to another tab.
+    _total(new_doc, 6, "5:B6", "4:C5")
+    assert _types(compare(old_doc, new_doc, SCHEMA)) == ["row_inserted"]
+
+
+def test_a_deleted_row_does_not_change_the_formulas_below():
+    old = BASE[:3] + [["Cliente C", "1", "2", "3"]] + BASE[3:]
+    old_doc, new_doc = _with_formulas(old), _with_formulas(BASE)
+    _total(old_doc, 6, "4:B6", "4:C5")
+    _total(new_doc, 5, "4:B5", "4:C5")
+    assert _types(compare(old_doc, new_doc, SCHEMA)) == ["row_deleted"]
+
+
+def test_a_formula_edited_after_a_row_insert_is_still_a_formula_change():
+    new = BASE[:3] + [["Cliente C", "1", "2", "3"]] + BASE[3:]
+    old_doc, new_doc = _with_formulas(BASE), _with_formulas(new)
+    _cell_at(new_doc, 5, 3)["formula"] = "=B6*2"
+    result = compare(old_doc, new_doc, SCHEMA)
+    assert _types(result) == ["formula", "row_inserted"]
+    change = next(c for c in result["changes"] if c["change_type"] == "formula")
+    assert (change["cell_ref"], change["old_formula"], change["new_formula"]) == (
+        "D6",
+        "=B5+$C$5",
+        "=B6*2",
+    )
+
+
+def test_a_formula_still_pointing_at_the_old_row_number_is_a_change():
+    new = BASE[:3] + [["Cliente C", "1", "2", "3"]] + BASE[3:]
+    old_doc, new_doc = _with_formulas(BASE), _with_formulas(new)
+    _total(old_doc, 5, "4:B5", "4:C5")
+    _total(new_doc, 6, "4:B5", "4:C5")
+    assert _types(compare(old_doc, new_doc, SCHEMA)) == ["formula", "row_inserted"]
+
+
+def test_a_gap_with_a_different_number_of_new_keys_is_ambiguous():
+    old = BASE[:4] + [["Cliente C", "1"], ["Cliente D", "2"]] + BASE[4:]
+    new = BASE[:4] + [["Cliente E", "3"]] + BASE[4:]
+    result = compare(_doc(*old), _doc(*new), SCHEMA)
+    assert sorted(key for _, key in result["ambiguous"]) == ["cliente c", "cliente d", "cliente e"]
+    assert _types(result) == ["row_deleted", "value", "value"]
+
+
+def test_an_insert_and_a_delete_in_the_same_block_are_not_ambiguous():
+    old = BASE[:5] + [["Cliente D", "4", "5", "6"]] + BASE[5:]
+    new = BASE[:3] + [["Cliente C", "1", "2", "3"]] + BASE[3:5] + BASE[5:]
+    result = compare(_doc(*old), _doc(*new), SCHEMA)
+    assert result["ambiguous"] == []
+    assert _types(result) == ["row_deleted", "row_inserted"]
