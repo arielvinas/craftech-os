@@ -1,7 +1,7 @@
 ---
 id: T-002
 title: Importación inicial: lector de Google Sheets, tabla snapshot y carga única de las 20 planillas
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: [T-001]
