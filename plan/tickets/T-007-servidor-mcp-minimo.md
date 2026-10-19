@@ -116,3 +116,7 @@ Hecho verificado el 18-oct-2026: los editores de Drive son identificadores `peop
 5. `docker compose -f infra/docker-compose.yml up -d`, que recrea `web` con las URLs del servidor MCP.
 6. Configurar Claude Desktop según `docs/claude-desktop.md` y reiniciarlo.
 7. Hacer las verificaciones manuales de `## Test plan` y tildar los criterios que quedan.
+
+## Decisions
+
+- 2026-10-19 — **Criterio 1: ¿los roles mcp_reader y mcp_writer los crea craftech-os migrate?** → Desvío aceptado por Ariel el 19-oct-2026: los crea infra/postgres-init/02-mcp-roles.sh como superusuario; la migración 0006 solo otorga permisos y falla con mensaje claro si faltan. craftech_app no puede crear roles.
