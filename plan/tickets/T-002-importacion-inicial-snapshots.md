@@ -43,7 +43,7 @@ Prerrequisito operativo (ADR, seguridad en los límites): FileVault activo en la
 
 - [x] `craftech-os sources resolve` completa `drive_id` para las 20 planillas; `config/sources.yaml` commiteado tiene los 20 ids y `git diff` muestra solo ids, ningún dato.
 - [x] `craftech-os import` corre completo en la laptop de Ariel y deja en `snapshot` exactamente una fila por pestaña activa (del orden de 342; el número exacto queda en `## Implementation`), cada una con `drive_version`, `drive_modified_at`, `content_hash` y `content` no nulos y `origin = 'lectura'`.
-- [ ] Correr `craftech-os import` de nuevo sin que cambie nada en Google no agrega filas a `snapshot` (mismo hash), y sí agrega `system_event` de lectura.
+- [x] Correr `craftech-os import` de nuevo sin que cambie nada en Google no agrega filas a `snapshot` (mismo hash), y sí agrega `system_event` de lectura. Excepción aceptada (decisión de Ariel del 18-oct-2026): una pestaña cuyo único cambio es el ruido de punto flotante del recálculo de fórmulas de Google (misma versión de Drive y mismo `modifiedTime` que el snapshot anterior, solo cambia el valor efectivo de celdas con fórmula) puede sumar un snapshot nuevo; el código del hash no cambia y distinguir un cambio real queda para T-004.
 - [x] Para una pestaña con celdas coloreadas (por ejemplo "Pagos" de "Facturación - Craftech Total"), el JSONB contiene colores de fondo en hexadecimal, fórmulas en las celdas que las tienen y al menos un rango combinado si la pestaña los tiene; se verifica con una consulta SQL, sin mostrar valores de celdas en el ticket ni en el QA.
 - [x] Toda pestaña real tiene `sheet_id` en `source_tab`; una pestaña presente en Google y ausente del YAML queda con clase `SIN_CLASIFICAR` y un `system_event` que la nombra.
 - [x] `system_event` tiene un evento `tab_read` por pestaña leída con `duration_ms` y `cell_count`; ningún `system_event` ni línea de log contiene un valor de celda (test sobre el serializador de eventos con un fixture que incluye un texto marcador y verifica que no aparece).
@@ -75,8 +75,8 @@ Prerrequisito operativo (ADR, seguridad en los límites): FileVault activo en la
 **Decisiones técnicas:**
 - Una pestaña se casa con su fila de `source_tab` por `sheet_id`; si no tiene, por nombre, y solo contra filas que todavía no tienen `sheet_id`.
 - `sources load` ya no desactiva las pestañas `SIN_CLASIFICAR`, porque vienen de Google y no del YAML.
-- Un error al leer una pestaña la marca fallida y la corrida sigue. Puede ser un error HTTP, de transporte, de serialización, o un JSON que PostgreSQL no acepta (por ejemplo `\u0000`). Al final el comando sale con código 1 y dice cuántas lecturas fallaron.
-- **httplib2** corta por defecto las respuestas gzip que se expanden más de 100 veces. La grilla de una pestaña grande supera ese límite (en la primera corrida hubo una de 100,4 veces). Desactivé ese chequeo de proporción, porque el único interlocutor es Google por TLS, y dejé un tope de 1 GiB por respuesta y un timeout de 300 segundos.
+- Un error al leer una pestaña la marca fallida y la corrida sigue. Puede ser un error HTTP, de transporte, de serialización, una respuesta de Drive sin `version` o sin `modifiedTime` (se validan dentro del mismo `try` que la lectura, antes de pedir la grilla), o un JSON que PostgreSQL no acepta (por ejemplo `\u0000`). Al final el comando sale con código 1 y dice cuántas lecturas fallaron.
+- **httplib2** corta por defecto las respuestas gzip que se expanden más de 100 veces. La grilla de una pestaña grande supera ese límite (en la primera corrida hubo una de 100,4 veces). Desactivé ese chequeo de proporción, porque el único interlocutor es Google por TLS, y dejé un tope de 1 GiB por respuesta y un timeout de 300 segundos. `httplib2` y `google-auth-httplib2` se importan directamente, así que están declarados en `pyproject.toml` (piso en las versiones del lock, 0.32 y 0.4: el módulo `httplib2.decode` que usa el código es reciente).
 
 **Medido en la laptop de Ariel (18-oct-2026), con la base de desarrollo:**
 - Snapshots: **342**, uno por cada una de las 342 pestañas activas. Ninguna quedó sin `sheet_id` ni sin snapshot, y ninguna tiene más de uno después de la primera corrida.
@@ -90,7 +90,7 @@ Prerrequisito operativo (ADR, seguridad en los límites): FileVault activo en la
 - Claves de los eventos en vivo: `tab_read` lleva `cell_count` y `stored`; `source_read` lleva `stored`, `unchanged` y `failed`; `google_retry` lleva `call`, `status`, `attempt` y `wait_s`. Ningún evento lleva valores.
 - **Segunda corrida, sin cambios en Google**: 338 pestañas sin cambio y 4 con snapshot nuevo, todas de "CASH FLOW MENSUAL" (CASH FLOW ARG, Cash Flow - c/ pagos proyectados, CASH FLOW USA y Resumen mensual Cash Flow ARG-USA). Agregó 342 `tab_read`.
   - En esas 4 pestañas la versión de Drive y el `modifiedTime` son los mismos. Lo único que cambia es el valor efectivo de celdas con fórmula: diferencias de hasta 4e-8, ruido de punto flotante del recálculo de Google. El texto formateado es idéntico.
-  - Por eso el criterio 3 queda **sin tildar**: se cumple para 338 de 342 pestañas. No lo resolví acá: decidir qué cuenta como cambio es de T-004. Lo anoté en `plan/improvements.md`. T-003 no relee si la versión de Drive no cambió.
+  - Ariel decidió aceptar ese ruido en la capa cruda (ver `## Decisions`): el criterio 3 se reescribió para excluirlo y no cambia el código del hash. Las otras 338 pestañas no suman snapshot. El caso queda anotado en `plan/improvements.md` para T-003 (no relee si la versión de Drive no cambió) y T-004 (qué cuenta como cambio).
 - La corrida que se cortó por el límite de httplib2 dejó 70 snapshots parciales. Los borré a mano (`TRUNCATE snapshot` en la base de desarrollo) antes de la corrida completa. Sus eventos, hasta el id 71, quedaron.
 
 ## Test plan
@@ -102,10 +102,13 @@ Prerrequisito operativo (ADR, seguridad en los límites): FileVault activo en la
   - Un texto marcador no aparece en ningún evento ni en la salida.
   - Un 429 o un 503 se reintenta con esperas de 1 y 2 segundos. Tras el máximo de reintentos la pestaña falla y la corrida sigue; un 403 no se reintenta.
   - Un 404 de planilla, un error de transporte (`DecodeLimitError`) y un `\u0000` fallan solo su pestaña o su planilla.
+  - Una respuesta de Drive sin `version`, o sin `modifiedTime`, falla solo esa pestaña con un `tab_failed` `{"error": "KeyError"}` y la corrida sigue (`test_a_drive_answer_without_version_fails_only_that_tab`, dos casos).
   - Una planilla sin `drive_id` no llama a Google, y un `--source` desconocido da error.
   - `resolve` parcial, con duplicados.
   - No hay `DELETE`, `UPDATE` ni `TRUNCATE` sobre `snapshot` en el código.
-- **QA en vivo**: correr `craftech-os import --source "Facturación - Craftech Total"` y las consultas de conteo de arriba. Nunca imprimir `content`.
+- **QA en vivo**: correr `craftech-os import --source "Facturación - Craftech Total"` y las consultas de conteo de arriba. Nunca imprimir `content`. En la ronda de arreglos la corrí de nuevo: `source_read` dio 0 stored, 47 unchanged, 0 failed.
+- **Criterio 3 reescrito**: una re-corrida puede sumar snapshots solo en pestañas con la misma `drive_version` y el mismo `drive_modified_at` que su snapshot anterior (hoy, las 4 de "CASH FLOW MENSUAL"); cualquier otra pestaña con un snapshot nuevo sin cambio en Google es un fallo.
+- **Dependencias**: `pyproject.toml` declara `httplib2` y `google-auth-httplib2`; la imagen construida importa `httplib2.decode` y `google_auth_httplib2`.
 - **Radio de impacto**: `sources load` (T-001) cambió en dos cosas: guarda `drive_id` y respeta las `SIN_CLASIFICAR`. `source_tab` tiene una restricción única nueva, `(source_id, sheet_id)`.
 
 ## Post-merge
