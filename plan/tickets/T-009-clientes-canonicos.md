@@ -94,6 +94,8 @@ Verificado en el repo el 19-oct-2026:
   - `importer.read_tab` lo activa solo para pestañas CARGA con esquema.
   - `diff/compare.py` no alinea, inserta ni borra filas hechas solo de celdas pintadas. Sin esto, pintar una fila vacía daría un `row_inserted`.
   - `issues/detect.py` ya toleraba celdas sin `value`, así que `color_desconocido` ve los colores nuevos.
+  - Pintar o despintar una celda vacía **no** genera un cambio `color`: una celda ausente en un documento anterior a T-009 puede estar pintada, porque no se guardaba. Un cambio `color` necesita la celda en los dos documentos. CodeRabbit pidió lo contrario en la ronda 1 y se revirtió en la ronda 3 de QA (F1 de la ronda 2): la primera lectura después del deploy registraba cambios `color` falsos en cada celda vacía de una fila pintada. Queda anotado en `plan/improvements.md` para decidirlo después.
+  - Las referencias de las fórmulas se corren contando solo las filas con valor (pedido de CodeRabbit en la ronda 1).
 - **Migración `0008_clients.sql`.**
   - `legal_entity` tiene `billing_system` único (`bejerman` para Craftech S.A., `zoho` para Craftech-io Inc.).
   - `client_legal_entity.source_system` es una clave foránea a esa columna. Eso cumple el CHECK de valores y además dice qué sociedad de Craftech factura.
@@ -134,10 +136,12 @@ Verificado en el repo el 19-oct-2026:
 - `tests/test_document.py` y `tests/test_diff_store.py`:
   - una celda pintada se conserva solo en CARGA con esquema y abre `color_desconocido`;
   - una fila solo pintada no genera cambios.
+- `tests/test_diff_compare.py`: la misma grilla leída como en la etapa A y como en T-009 da 0 cambios, en los dos sentidos, con esquema, sin esquema y con esquema sin fila de encabezado (comparación por posición).
 - `tests/test_db.py`: las tablas y migraciones nuevas.
 - Mutaciones, cada una pone la suite en rojo:
   - ordenar los aliases de forma ascendente;
   - apagar `keep_color_only`;
+  - contar como `color` el paso de una celda ausente a una pintada;
   - no saltear las decisiones repetidas.
 - Prueba de humo: el CLI real contra la base de prueba con CSVs inventados en `/tmp`, dos corridas de cada carga y un archivo que no existe.
 - **Alcance del cambio:**
