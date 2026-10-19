@@ -82,16 +82,27 @@ Verificado en el repo tras T-003: hay snapshots consecutivos por pestaña con `s
 - CLI `craftech-os diff --tab <planilla> <pestaña> [--from --to]`: solo conteos, no escribe.
 - README: sección "Cambios y problemas".
 
+Ronda de arreglos (QA ronda 1):
+- F1: antes de comparar fórmulas, la fórmula anterior se reescribe como lo haría Google tras las filas y columnas insertadas o borradas (`_shift` + `_moved_formula` en `compare.py`). Cada referencia a una fila alineada va a su fila nueva; una fila sin par (vacía o borrada) cae justo antes de la siguiente fila que no se movió; las referencias a otra pestaña y los textos entre comillas no se tocan. Las referencias absolutas (`$C$5`) también se corren, igual que en Google. Una fórmula que se edita de verdad sigue siendo `formula`, y la que quedó apuntando al número de fila viejo también.
+- F2: test del hueco con distinta cantidad de filas con clave (dos de un lado, una del otro).
+- F3: una clave que se va y otra que aparece en lugares distintos solo son `alineacion_ambigua` si alguna de las dos filas nuevas tiene el mismo contenido (sin contar la clave y sin importar la columna) que alguna de las que se fueron. Insertar una fila arriba y borrar otra abajo en la misma lectura da `row_inserted` + `row_deleted` sin problemas.
+- F4: sin cambio de código; una fila completamente vacía no existe en el documento de la foto (T-002), así que no deja `row_inserted`. Para la prueba en vivo del criterio 2, insertar una fila con la clave escrita.
+- F5: la clave de `valor_ilegible` lleva el número de repetición cuando la clave de fila se repite (regla R26: `cliente a (2):feb`); la primera aparición conserva la clave de siempre. Los colores sobre celdas vacías quedan fuera (los descarta el documento de T-002): logueado en `plan/improvements.md`.
+
 ## Test plan
 
 - `uv run pytest -q` → 140 passed; `ruff check` y `ruff format --check` limpios.
 - `app/tests/test_diff_compare.py` (22, puros) cubre el punto 6 del alcance; `app/tests/test_diff_store.py` (integración, sintéticos) cubre fila insertada guardada, color/valor/vaciado, color desconocido en 51 celdas → un problema y `last_seen_at` que avanza, `814,8` → `valor_ilegible`, tercera clave repetida → `alineacion_ambigua`, `v_issue` ignorado/reabierto, renombre solo en Google → `tab_renamed` (mismo id), pestaña nueva/borrada, pestaña sin esquema por posición, CLI `diff`, ningún valor en eventos, problemas ni salida.
 - Mutación: con `normalize` devolviendo el texto sin cambios fallan 10 tests, entre ellos `test_a_moved_row_respelled_still_aligns_by_normalized_key` (sale `row_deleted` + `row_inserted` en vez de `row_moved` + `value`); restaurado, 22 passed.
 - Humo de solo lectura sobre las fotos reales locales (solo conteos): los siete encabezados y sus bloques se encuentran, ninguna pestaña cae a posición, comparar una foto consigo misma da 0 cambios; FUNDINGS (única con dos fotos) da 2 `value` y 0 ambiguas.
+- Ronda 2: `uv run pytest -q` → 147 passed. Nuevos en `test_diff_compare.py`: fila insertada arriba de fórmulas (por fila, con `$`, rango y referencia a otra pestaña) → solo `row_inserted`; fila borrada → solo `row_deleted`; fórmula editada tras la inserción → `formula` con la fórmula vieja original; fórmula que quedó con el número viejo → `formula`; hueco 2↔1 → ambiguas; alta + baja en el mismo bloque → sin ambiguas. En `test_diff_store.py`: dos filas con la misma clave y texto en la grilla → dos `valor_ilegible`.
+- Mutación ronda 2: comparar la fórmula sin reescribir → 4 rojos; la guarda del hueco en `if False:` → 1 rojo (antes sobrevivía); ambigüedad sin mirar el contenido → 1 rojo; traducir también referencias a otra pestaña → 3 rojos; fila sin par corrida con el desplazamiento del vecino → 1 rojo; sin ordinal en `valor_ilegible` → 1 rojo.
+- Humo ronda 2 (solo lectura, solo conteos, copia en `/tmp` borrada): en el último snapshot real de las siete pestañas con esquema, insertar una fila con clave como lo haría Google (filas y referencias corridas) da exactamente un `row_inserted`; con la comparación de fórmulas anterior daba entre 91 y 1087 `formula` por pestaña.
+- Para la prueba en vivo del criterio 2: insertar una fila **con la clave escrita**; una fila totalmente vacía no deja ningún cambio (ver F4).
 - Pendiente de Ariel: los criterios en vivo sobre su planilla de prueba (fila insertada, color, vaciado, color fuera de lista, renombre y alta de pestaña) con un esquema de prueba en `sources.yaml`.
 
 ## Post-merge
 
 - `craftech-os migrate` y `craftech-os sources load` (carga los esquemas), reconstruir la imagen y reiniciar el worker.
-- Tras un día de worker: `SELECT count(*) FROM system_event WHERE kind = 'tab_diffed'` igual a la cantidad de snapshots nuevos del día; revisar cambios por pestaña por día (más de 200 se revisa a mano) y los primeros `color_desconocido` (se esperan `#d0e0e3`, `#ea9999` y otros).
+- Tras un día de worker: `SELECT count(*) FROM system_event WHERE kind = 'tab_diffed'` igual a la cantidad de snapshots nuevos del día; revisar cambios por pestaña por día (más de 200 se revisa a mano) y los primeros `color_desconocido` (se espera `#ea9999`; `#c9daf8` y `#d0e0e3` están en celdas vacías y no se ven, ver `plan/improvements.md`).
 
