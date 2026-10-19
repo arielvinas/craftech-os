@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: Web local de solo visualización: pantallas Cambios, Problemas y Fuentes, con botón "leer ahora"
-status: in-progress
+status: qa
 priority: high
 lane: ui
 depends_on: [T-004]
