@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_color.html" import swatch %}
+{% block title %}Cambio {{ c.id }}{% endblock %}
+{% block content %}
+<h1>Cambio {{ c.id }}</h1>
+<p><a href="/cambios">← Cambios</a></p>
+<table class="detail">
+  <tr><th>Planilla</th><td>{{ c.source_title }}</td></tr>
+  <tr><th>Pestaña</th><td>{{ c.tab_name }}</td></tr>
+  <tr><th>Celda</th><td>{{ c.cell_ref or "—" }}</td></tr>
+  <tr><th>Tipo</th><td>{{ c.change_type }}</td></tr>
+  <tr><th>Bloque</th><td>{{ c.block or "—" }}</td></tr>
+  <tr><th>Clave de fila</th><td>{{ c.row_key or "—" }}</td></tr>
+  <tr><th>Orden entre filas con la misma clave</th><td>{{ c.row_ordinal or "—" }}</td></tr>
+  <tr><th>Valor anterior</th><td class="value">{{ c.old_value if c.old_value is not none else "—" }}</td></tr>
+  <tr><th>Valor nuevo</th><td class="value">{{ c.new_value if c.new_value is not none else "—" }}</td></tr>
+  <tr><th>Fórmula anterior</th><td class="value"><code>{{ c.old_formula or "—" }}</code></td></tr>
+  <tr><th>Fórmula nueva</th><td class="value"><code>{{ c.new_formula or "—" }}</code></td></tr>
+  <tr><th>Color anterior</th><td>{{ swatch(c.old_color) }}</td></tr>
+  <tr><th>Color nuevo</th><td>{{ swatch(c.new_color) }}</td></tr>
+  <tr><th>Detectado el</th><td>{{ c.detected_at | when }}</td></tr>
+  <tr><th>Ventana</th><td>{{ c.window_start | when }} a {{ c.window_end | when }}</td></tr>
+  <tr><th>Atribución</th><td>{{ c.attribution }}</td></tr>
+  <tr><th>Certeza de la atribución</th><td>{{ c.attribution_certainty or "sin procesar" }}</td></tr>
+  <tr><th>Editores (identificadores)</th><td>{{ (c.attributed_editor_ids or []) | join(", ") or "—" }}</td></tr>
+  <tr><th>Atribuido el</th><td>{{ c.attributed_at | when }}</td></tr>
+  <tr><th>Snapshot anterior</th><td>{% if c.from_snapshot %}<a href="/cambios?snapshot={{ c.from_snapshot }}">{{ c.from_snapshot }}</a>{% else %}—{% endif %}</td></tr>
+  <tr><th>Snapshot nuevo</th><td>{% if c.to_snapshot %}<a href="/cambios?snapshot={{ c.to_snapshot }}">{{ c.to_snapshot }}</a>{% else %}—{% endif %}</td></tr>
+</table>
+{% endblock %}

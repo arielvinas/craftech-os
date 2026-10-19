@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Fuentes{% endblock %}
+{% block content %}
+<h1>Fuentes</h1>
+{% if message %}<p class="message">{{ message }}</p>{% endif %}
+
+<section class="health">
+  <h2>Salud del sistema</h2>
+  <table class="detail">
+    <tr><th>Última vuelta del worker</th><td>{{ health.last_tick | when }}</td></tr>
+    <tr><th>Intervalo máximo entre vueltas (últimas 24 horas)</th><td>{{ health.max_gap | duration }}</td></tr>
+    <tr><th>Último dump</th><td>
+      {% if health.last_dump %}{{ health.last_dump | when }}, {{ "{:,}".format(health.dump_bytes or 0) }} bytes{% else %}ninguno{% endif %}
+      {% if health.dump_stale %}<strong class="warning">Aviso: no hay un dump de las últimas 48 horas.</strong>{% endif %}
+    </td></tr>
+    <tr><th>Tamaño de la base</th><td>{{ "{:,}".format(health.db_bytes) }} bytes</td></tr>
+    <tr><th>Reintentos de la API de Google hoy</th><td>{{ health.retries_today }}</td></tr>
+  </table>
+</section>
+
+<p>{{ rows | length }} planillas.</p>
+{% for s in rows %}
+<section class="source" id="fuente-{{ s.id }}">
+  <h2>{{ s.title }}</h2>
+  <p>
+    Versión de Drive conocida: {{ s.drive_version or "—" }} ·
+    Última vuelta del worker que la chequeó: {% if s.drive_id %}{{ s.last_check | when }}{% else %}nunca (sin identificador de Drive){% endif %} ·
+    Pedido de lectura pendiente: {% if s.pending_since %}desde {{ s.pending_since | when }}{% else %}no{% endif %}
+    {% if s.default_class %} · Todas las pestañas: {{ s.default_class }}{% endif %}
+  </p>
+  <form method="post" action="/fuentes/{{ s.id }}/leer-ahora">
+    <button type="submit">Leer ahora</button>
+  </form>
+  <table>
+    <thead>
+      <tr>
+        <th>Pestaña</th><th>Clase</th><th>sheet_id</th><th>Activa</th><th>Último snapshot</th>
+        <th>Duración de lectura</th><th>Snapshots</th><th>Cambios 24 h</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tabs.get(s.id, []) %}
+      <tr{% if not t.active %} class="inactive"{% endif %}>
+        <td>{{ t.name }}</td>
+        <td>{{ t.class }}</td>
+        <td>{{ t.sheet_id if t.sheet_id is not none else "—" }}</td>
+        <td>{{ "sí" if t.active else "no" }}</td>
+        <td>{{ t.last_read_at | when }}</td>
+        <td class="num">{% if t.last_duration_ms is not none %}{{ t.last_duration_ms }} ms{% else %}—{% endif %}</td>
+        <td class="num">{{ t.snapshots }}</td>
+        <td class="num">{{ t.changes_24h }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+{% endblock %}

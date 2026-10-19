@@ -109,6 +109,20 @@ Para recalcular a mano las diferencias entre las dos últimas fotos de una pesta
 docker compose -f infra/docker-compose.yml run --rm app craftech-os diff --tab "Facturación - Craftech Total" "Pagos" [--from <id> --to <id>]
 ```
 
+## Web local
+
+```bash
+docker compose -f infra/docker-compose.yml up -d    # postgres, worker y web
+```
+
+Abre en <http://127.0.0.1:8000/> (solo desde esta laptop: no hay login). Es de solo lectura, salvo el botón "leer ahora":
+
+- **Cambios:** los `cell_change` más nuevos primero, de a 100, con filtros por planilla, pestaña, tipo, clave de fila, editor (o "sin atribuir") y fechas, y un resumen por día y por tipo. Cada fila abre su detalle con fórmulas y colores anterior y nuevo. El editor se muestra con el nombre de `editor_profile` cuando la tabla existe.
+- **Problemas:** los de `v_issue` con su estado, dueño y última resolución; filtros por tipo, estado y planilla. Se resuelven desde Claude Desktop, no desde la web.
+- **Fuentes:** la salud del sistema (última vuelta del worker, intervalo máximo de las últimas 24 horas, último dump con aviso si tiene más de 48 horas, tamaño de la base, reintentos de hoy) y cada planilla con sus pestañas. "Leer ahora" crea un pedido pendiente como `read-now`; si ya hay uno, no crea otro.
+
+Para correrla fuera de Docker: `DATABASE_URL=... uv run craftech-os web`.
+
 ## Tests
 
 ```bash

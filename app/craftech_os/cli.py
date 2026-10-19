@@ -174,6 +174,12 @@ def cmd_dump(args) -> None:
     print(f"dumped {path}")
 
 
+def cmd_web(args) -> None:
+    import uvicorn
+
+    uvicorn.run("craftech_os.web.app:app", host=args.host, port=args.port)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="craftech-os")
     commands = parser.add_subparsers(required=True)
@@ -217,6 +223,12 @@ def main(argv: list[str] | None = None) -> int:
     dump_cmd = commands.add_parser("dump", help="pg_dump the database now")
     dump_cmd.add_argument("--dir", type=Path, default=worker.BACKUPS_DIR)
     dump_cmd.set_defaults(func=cmd_dump)
+    web_cmd = commands.add_parser(
+        "web", help="serve the read-only screens Cambios, Problemas, Fuentes"
+    )
+    web_cmd.add_argument("--host", default="127.0.0.1", help="0.0.0.0 inside the container")
+    web_cmd.add_argument("--port", type=int, default=8000)
+    web_cmd.set_defaults(func=cmd_web)
     args = parser.parse_args(argv)
     try:
         args.func(args)
