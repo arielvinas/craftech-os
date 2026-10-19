@@ -448,6 +448,10 @@ def test_celdas_has_the_cells_of_the_last_read_with_their_a1_reference(server, d
     )
     assert search["filas"] == [["A1"]]
 
+    # A color-only cell has SQL NULL (not JSON null) as valor, so IS NULL finds it.
+    nulls = _call(server, "consultar_sql", sql="SELECT celda FROM mcp.celdas WHERE valor IS NULL")
+    assert nulls["filas"] == [["C1"]]
+
 
 def test_celdas_spells_every_sheets_column_like_google(db):
     # Google Sheets stops at column ZZZ (18278 columns): every one of them, compared.
