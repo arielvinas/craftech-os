@@ -16,3 +16,4 @@
 - [ ] Tests: StarletteDeprecationWarning de TestClient sobre httpx; revisar al subir Starlette (T-006)
 - [ ] [test-coverage] Filtro clave (escape de %, _ y \) y fecha 'hasta' inclusiva de /cambios sin test (mutantes sobreviven) — QA T-006 r1 (minor)
 - [ ] [nit] Variable now pasada a la plantilla y no usada; enlace de paginación /cambios?&pagina=2 sin filtros; falta meta viewport — QA T-006 r1 (nits)
+- [ ] [ux] La pantalla Cambios de la web muestra el actor_id crudo cuando no hay nombre; debería usar la etiqueta de v_editor ("editor sin identificar #N" / "usuario eliminado") — T-005
