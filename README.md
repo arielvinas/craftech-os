@@ -138,7 +138,7 @@ Los archivos con datos de clientes viven fuera del repo, en `~/repos/craftech-os
 
 ```bash
 docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app \
-  craftech-os clients load-zoho /data/zoho/Contacts.csv
+  craftech-os clients load-zoho /data/Contacts.csv
 docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app \
   craftech-os aliases load /data/aliases.csv
 ```

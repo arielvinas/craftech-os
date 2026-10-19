@@ -132,6 +132,16 @@ def test_a_value_and_its_color_changing_together_are_two_changes():
     assert _types(compare(old, new, SCHEMA)) == ["color", "value"]
 
 
+def test_painting_or_unpainting_an_empty_cell_is_a_color_change():
+    old, new = _doc(*BASE), _doc(*BASE)
+    next(row for row in new["rows"] if row["r"] == 2)["cells"].append({"c": 1, "bg": "#ff9900"})
+    (change,) = compare(old, new, SCHEMA)["changes"]
+    assert (change["change_type"], change["cell_ref"]) == ("color", "B3")
+    assert (change["old_color"], change["new_color"]) == (None, "#ff9900")
+    (change,) = compare(new, old, SCHEMA)["changes"]
+    assert (change["old_color"], change["new_color"]) == ("#ff9900", None)
+
+
 def test_emptying_a_cell_is_emptied():
     new = [list(row) for row in BASE]
     new[4][2] = None
@@ -291,6 +301,17 @@ def test_deleting_the_last_row_of_a_range_shrinks_it():
     _total(old_doc, 6, "4:B6", "4:C5")
     _total(new_doc, 5, "4:B5", "4:C5")
     assert _types(compare(old_doc, new_doc, SCHEMA)) == ["row_deleted"]
+
+
+def test_a_formula_pointing_at_a_painted_empty_row_does_not_change():
+    rows = BASE[:5] + [[None]] + BASE[5:]
+    docs = []
+    for _ in range(2):
+        doc = _doc(*rows)
+        doc["rows"].append({"r": 5, "cells": [{"c": 1, "bg": "#ff9900"}]})
+        _cell_at(doc, 6, 1)["formula"] = "=B6"
+        docs.append(doc)
+    assert compare(*docs, SCHEMA)["changes"] == []
 
 
 def test_a_column_inserted_before_formulas_does_not_change_them():

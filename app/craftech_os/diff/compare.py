@@ -123,10 +123,10 @@ def cell_changes(
             out.append(_change("formula", cell_ref=ref, old_formula=of, new_formula=nf, **row))
         if ov != nv:
             out.append(_change("value", cell_ref=ref, old_value=ov, new_value=nv, **row))
-    if old is not None and new is not None and old.get("bg") != new.get("bg"):
-        out.append(
-            _change("color", cell_ref=ref, old_color=old.get("bg"), new_color=new.get("bg"), **row)
-        )
+    old_bg, new_bg = (old or {}).get("bg"), (new or {}).get("bg")
+    # A missing cell is unpainted; a value that appears is its own change.
+    if old_bg != new_bg and (old is not None and new is not None or nv is None):
+        out.append(_change("color", cell_ref=ref, old_color=old_bg, new_color=new_bg, **row))
     return out
 
 
@@ -359,7 +359,7 @@ def _schema_changes(old_doc: dict, new_doc: dict, schema: dict):
         aligned += [(name, old, new, id(new) in moved) for old, new in pairs]
     rows = {old["r"]: new["r"] for _, old, new, _ in aligned if old and new}
     in_place = {old["r"]: new["r"] for _, old, new, m in aligned if old and new and not m}
-    present = {row["r"] for row in old_doc["rows"]}
+    present = {row["r"] for rows in old_by_name.values() for row in rows}
     moved_formula = _moved_formula(
         _shift(rows, in_place, present), _shift(columns, columns, range(width))
     )
