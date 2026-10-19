@@ -21,3 +21,4 @@
 - [ ] [docs] drive_activity parse usa solo el primer actor de cada actividad (ninguna real tiene más de uno); dejarlo en comentario o test — QA T-005 r1 (F2)
 - [ ] [test-coverage] Servidor MCP: sin test para el modo de solo lectura del usuario lector (sin él, SELECT lo_create(0) pasa el filtro de consultar_sql y escribe) ni para la regla de que solo el usuario escritor del MCP registra eventos mcp_write — QA T-007 r1 (F2)
 - [ ] [ux] consultar_sql rechaza consultas legítimas con 'delete', 'update' o ';' dentro de un texto entre comillas — QA T-007 r1 (F3)
+- [ ] [data-integrity] En una pestaña real la última lectura difiere de la planilla viva aunque la fecha de modificación en Drive es anterior a la lectura; investigar cómo decide el worker cuándo releer — QA T-008 r1 (split-out)
