@@ -37,7 +37,7 @@ Verificado en el repo tras T-002: existe el lector de pestañas, `snapshot` y `s
 
 ## Acceptance criteria
 
-- [ ] `docker compose up -d` levanta `postgres` y `worker`; `docker compose logs worker` muestra una vuelta cada 5 minutos (±10 segundos) con planillas chequeadas y sin valores de celdas.
+- [x] `docker compose up -d` levanta `postgres` y `worker`; `docker compose logs worker` muestra una vuelta cada 5 minutos (±10 segundos) con planillas chequeadas y sin valores de celdas.
 - [ ] Al editar una celda en una planilla de prueba propia de Ariel configurada en un `sources.yaml` de prueba (nunca en las planillas de Finanzas), en menos de 8 minutos aparece un `system_event` `version_changed`, luego un `calm_wait`, y un `snapshot` nuevo solo de la pestaña editada; las pestañas no tocadas no suman snapshots.
 - [ ] Una pestaña `HISTORICA`, `IGNORAR` o `A_CONFIRMAR` de esa planilla de prueba, editada, no genera snapshot nuevo en la lectura continua; `craftech-os import --source` sí la relee.
 - [x] `craftech-os read-now "<título>"` dos veces seguidas deja una sola fila pendiente en `read_request`; en la siguiente vuelta tiene `served_at` y la planilla fue leída aunque su versión no haya cambiado.
