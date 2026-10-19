@@ -60,5 +60,6 @@ Verificado en el repo tras T-004: `cell_change` tiene `window_start`, `window_en
 
 ## Decisions
 
+- 2026-10-19 — **FUNDINGS tiene 13 actores, no ~8: ¿a quiénes numerar como 'editor sin identificar #N'?** → (a) Numerar a TODOS los actores de la actividad, incluidos los que solo cambiaron permisos. Anotar en el ticket el número final medido en la importación real (el criterio de '~8' se ajusta a lo medido).
 - 2026-10-19 — **Actividades de cuentas eliminadas (deletedUser, sin identificador)** → (a) Guardarlas con un único actor_id = 'deletedUser', que cuenta como un actor más y aparece en v_editor como 'usuario eliminado'; si es el único de la ventana, sale cierta con ese identificador.
 - 2026-10-19 — **Ventana de atribución: Drive Activity agrupa ediciones en tandas ~3 min y les pone hora 1,5–2,5 min después de la modificación; la ventana (window_start, window_end] atribuye mal** → (a) Ensanchar: contar actividad en (window_start, window_end + 5 min]; atribuir solo cuando ya se leyó la actividad posterior a window_end + 5 min. Nunca da cierta a la persona equivocada.
