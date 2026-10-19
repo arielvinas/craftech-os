@@ -148,8 +148,8 @@ Verificado en el repo el 19-oct-2026:
 ## Post-merge
 
 1. Ariel exporta a `~/repos/craftech-os-data/` el `Contacts.csv` de Zoho Books y el CSV con las 51 decisiones del artefacto de Aliases.
-2. `craftech-os clients load-zoho ~/repos/craftech-os-data/Contacts.csv` y `craftech-os aliases load ~/repos/craftech-os-data/aliases.csv`. Verificar con las cantidades que informan, y con `SELECT count(*)` en `mcp.clientes` y `mcp.aliases`.
+2. `craftech-os clients load-zoho /data/Contacts.csv` y `craftech-os aliases load /data/aliases.csv`, dentro del contenedor como indica el paso 4. Verificar con las cantidades que informan, y con `SELECT count(*)` en `mcp.clientes` y `mcp.aliases`.
 3. Si los encabezados reales del CSV de Zoho difieren de los supuestos, ajustar el mapeo en un commit chico antes de cargar.
-4. Los comandos corren en el contenedor con la carpeta montada: `docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app craftech-os clients load-zoho /data/Contacts.csv` (ver la sección "Clientes y aliases" del README).
+4. Los comandos corren en el contenedor con la carpeta montada: `docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app <comando del paso 2>`; la carpeta queda en `/data` (ver la sección "Clientes y aliases" del README).
 5. Cargar Zoho antes que los aliases. Zoho nombra cada cliente con su Display Name, que es la razón social. En el CSV de aliases, la columna `cliente` tiene que coincidir, normalizada, con esa razón social o con un nombre ya cargado. Si trae un nombre de fantasía distinto, se crea un cliente aparte. Revisar `mcp.clientes` después de la carga: si hay duplicados, hace falta decidir cómo unir el nombre de fantasía con la razón social.
 6. Criterio pendiente: en la planilla de prueba, pintar una celda vacía en una pestaña con esquema y verificar en la lectura siguiente su color en `mcp.celdas`. Un color fuera de la lista tiene que abrir `color_desconocido`.
