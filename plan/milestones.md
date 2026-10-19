@@ -5,7 +5,7 @@ Las etapas vienen de `docs/03-proposal.md`, sección 6, ajustadas por `plan/adr/
 | Milestone | Nombre | Entregable | Tickets | Estado |
 |---|---|---|---|---|
 | A | Espejo | Importación inicial de las 20 planillas, lectura continua, cambios celda a celda con quién y cuándo, problemas básicos, web (Cambios, Problemas, Fuentes), servidor MCP mínimo | T-001 … T-008 | done (18-oct-2026; T-008 sumó las celdas actuales al servidor MCP) |
-| B | Ingresos y servidor MCP completo | Devengados, facturas por color, cobros, fundings, clientes canónicos con aliases; pantallas Facturas y cobros, Fundings, Clientes | se cortan con el ADR de la etapa B | en diseño |
+| B | Ingresos y servidor MCP completo | Devengados, facturas por color, cobros, fundings, clientes canónicos con aliases; pantallas Facturas y cobros, Fundings, Clientes | se cortan con `/ticket` sobre `plan/adr/ADR-002-ingresos-como-proyeccion-de-lecturas.md` (T-009 … T-014 sugeridos) | ADR-002 propuesto (19-oct-2026) |
 | C | Gastos, sueldos, budget y paridad | Movimientos bancarios, nómina, budget; P&L y cashflow regenerados; tablero de paridad | se cortan con B mergeada | — |
 | D | Hosting y Finanzas adentro | AWS, login, Emi y Ro, Slack, alertas, rotación de la clave | — | — |
 
