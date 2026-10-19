@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_color.html" import swatch %}
+{% block title %}Cambios{% endblock %}
+{% block content %}
+<h1>Cambios</h1>
+<form method="get" action="/cambios" class="filters">
+  <label>Planilla
+    <select name="planilla">
+      <option value="">Todas</option>
+      {% for id, title in sources %}
+      <option value="{{ id }}" {% if f.planilla == id %}selected{% endif %}>{{ title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Pestaña
+    <select name="pestana">
+      <option value="">Todas</option>
+      {% for id, title, name in tabs %}
+      <option value="{{ id }}" {% if f.pestana == id %}selected{% endif %}>{{ title }} › {{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Tipo
+    <select name="tipo">
+      <option value="">Todos</option>
+      {% for t in change_types %}
+      <option value="{{ t }}" {% if f.tipo == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Clave de fila contiene <input type="text" name="clave" value="{{ f.clave }}" maxlength="200"></label>
+  <label>Editor
+    <select name="editor">
+      <option value="">Todos</option>
+      <option value="{{ not_attributed }}" {% if f.editor == not_attributed %}selected{% endif %}>sin atribuir</option>
+      {% for id, name in editors %}
+      <option value="{{ id }}" {% if f.editor == id %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Desde <input type="date" name="desde" value="{{ f.desde or '' }}"></label>
+  <label>Hasta <input type="date" name="hasta" value="{{ f.hasta or '' }}"></label>
+  {% if f.snapshot is not none %}<input type="hidden" name="snapshot" value="{{ f.snapshot }}">{% endif %}
+  <button type="submit">Filtrar</button>
+  <a href="/cambios">Limpiar</a>
+</form>
+{% if f.snapshot is not none %}<p>Solo los cambios hacia o desde el snapshot {{ f.snapshot }}.</p>{% endif %}
+
+<section class="summary">
+  <h2>Resumen del período: {{ summary.total }} cambios</h2>
+  <div class="side-by-side">
+    <table>
+      <thead><tr><th>Día</th><th>Cambios</th></tr></thead>
+      <tbody>
+        {% for day, n in summary.by_day %}<tr><td>{{ day }}</td><td class="num">{{ n }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Tipo</th><th>Cambios</th></tr></thead>
+      <tbody>
+        {% for t, n in summary.by_type %}<tr><td>{{ t }}</td><td class="num">{{ n }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if rows %}
+<table class="changes">
+  <thead>
+    <tr>
+      <th>Detectado el</th><th>Ventana</th><th>Planilla › pestaña › celda</th><th>Bloque / clave</th>
+      <th>Tipo</th><th>Valor anterior → nuevo</th><th>Color anterior → nuevo</th><th>Atribución</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in rows %}
+    <tr>
+      <td><a href="/cambios/{{ c.id }}">{{ c.detected_at | when }}</a></td>
+      <td>{{ c.window_start | when }} a {{ c.window_end | when }}</td>
+      <td>{{ c.source_title }} › {{ c.tab_name }}{% if c.cell_ref %} › {{ c.cell_ref }}{% endif %}</td>
+      <td>{{ c.block or "—" }} / {{ c.row_key or "—" }}{% if c.row_ordinal and c.row_ordinal > 1 %} ({{ c.row_ordinal }}){% endif %}</td>
+      <td>{{ c.change_type }}</td>
+      <td class="value">{{ c.old_value if c.old_value is not none else "—" }} → {{ c.new_value if c.new_value is not none else "—" }}</td>
+      <td>{% if c.old_color or c.new_color %}{{ swatch(c.old_color) }} → {{ swatch(c.new_color) }}{% else %}—{% endif %}</td>
+      <td>{{ c.attribution }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay cambios con estos filtros.</p>
+{% endif %}
+
+<p class="pages">
+  {% if page > 1 %}<a href="/cambios?{{ query | urlencode }}&amp;pagina={{ page - 1 }}">← anterior</a>{% endif %}
+  Página {{ page }}
+  {% if has_next %}<a href="/cambios?{{ query | urlencode }}&amp;pagina={{ page + 1 }}">siguiente →</a>{% endif %}
+</p>
+{% endblock %}

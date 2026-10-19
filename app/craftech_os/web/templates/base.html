@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}{% endblock %} · Craftech OS</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav>
+    <strong>Craftech OS</strong>
+    <a href="/cambios">Cambios</a>
+    <a href="/problemas">Problemas</a>
+    <a href="/fuentes">Fuentes</a>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

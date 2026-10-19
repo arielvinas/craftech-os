@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Problema {{ i.id }}{% endblock %}
+{% block content %}
+<h1>Problema {{ i.id }}: {{ i.issue_type }}</h1>
+<p><a href="/problemas">← Problemas</a></p>
+<table class="detail">
+  <tr><th>Planilla</th><td>{{ i.source_title }}</td></tr>
+  <tr><th>Pestaña</th><td>{{ i.tab_name or "—" }}</td></tr>
+  <tr><th>Clave estable</th><td><code>{{ i.stable_key }}</code></td></tr>
+  <tr><th>Estado</th><td class="status-{{ i.status }}">{{ i.status }}</td></tr>
+  <tr><th>Dueño</th><td>{{ i.owner or "—" }}</td></tr>
+  <tr><th>Visto por primera vez</th><td>{{ i.first_seen_at | when }}</td></tr>
+  <tr><th>Visto por última vez</th><td>{{ i.last_seen_at | when }}</td></tr>
+</table>
+<h2>Detalle</h2>
+<pre>{{ i.details | pretty_json }}</pre>
+<h2>Resoluciones</h2>
+{% if i.resolutions %}
+<table>
+  <thead><tr><th>Fecha</th><th>Acción</th><th>Autor</th><th>Motivo</th></tr></thead>
+  <tbody>
+    {% for r in i.resolutions %}
+    <tr><td>{{ r.created_at | when }}</td><td>{{ r.action }}</td><td>{{ r.author }}</td><td>{{ r.reason or "—" }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Sin resoluciones.</p>
+{% endif %}
+{% endblock %}
