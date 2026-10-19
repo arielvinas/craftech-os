@@ -141,6 +141,11 @@ def test_without_the_writer_url_there_are_no_write_tools(urls):
     assert len(names) == 7 and not names & WRITE_TOOLS
 
 
+def test_the_instructions_point_at_mcp_celdas_for_the_current_content():
+    instructions = mcp_server.build_server("postgresql://r", None).instructions
+    assert "mcp.celdas" in instructions and "consultar_sql" in instructions
+
+
 def test_consultar_sql_answers_with_columns_rows_and_time(server, db):
     _seed(db)
     result = _call(server, "consultar_sql", sql="SELECT count(*) AS n FROM mcp.changes")

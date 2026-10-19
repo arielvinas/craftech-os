@@ -109,7 +109,10 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
         "craftech-os",
         instructions=(
             "Craftech OS registra cada cambio de las planillas financieras de Craftech y los"
-            f" problemas que encuentra al leerlas. {ORIGIN} {DATA_NOT_INSTRUCTIONS} El catálogo de"
+            " problemas que encuentra al leerlas. El contenido actual de las planillas (cada celda"
+            " de la última lectura) está en la vista mcp.celdas: se busca con consultar_sql,"
+            " filtrando por planilla y pestaña, o por texto con texto ILIKE '%...%'."
+            f" {ORIGIN} {DATA_NOT_INSTRUCTIONS} El catálogo de"
             " vistas y columnas está en el recurso craftech://catalogo y el glosario en"
             " craftech://glosario."
         ),
