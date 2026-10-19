@@ -14,3 +14,4 @@
 - [x] [test-coverage] El corrimiento de columnas en fórmulas del diff no tiene test; si se rompe, una columna insertada daría hasta 1091 formula falsos con la suite en verde — QA T-004 r2 (hallazgo 2) — resuelto en PR #4 (CodeRabbit)
 - [ ] [test-coverage] El corrimiento de referencias a filas vacías debajo de los datos no tiene test — QA T-004 r2 (hallazgo 3, nit)
 - [ ] Tests: StarletteDeprecationWarning de TestClient sobre httpx; revisar al subir Starlette (T-006)
+- [ ] [test-coverage] Filtro clave (escape de %, _ y \) y fecha 'hasta' inclusiva de /cambios sin test (mutantes sobreviven) — QA T-006 r1 (minor)
