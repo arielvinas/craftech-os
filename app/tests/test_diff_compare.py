@@ -285,6 +285,27 @@ def test_a_deleted_row_does_not_change_the_formulas_below():
     assert _types(compare(old_doc, new_doc, SCHEMA)) == ["row_deleted"]
 
 
+def test_deleting_the_last_row_of_a_range_shrinks_it():
+    old = BASE[:5] + [["Cliente C", "1", "2", "3"]] + BASE[5:]
+    old_doc, new_doc = _with_formulas(old), _with_formulas(BASE)
+    _total(old_doc, 6, "4:B6", "4:C5")
+    _total(new_doc, 5, "4:B5", "4:C5")
+    assert _types(compare(old_doc, new_doc, SCHEMA)) == ["row_deleted"]
+
+
+def test_a_column_inserted_before_formulas_does_not_change_them():
+    new = [list(row) for row in BASE]
+    for row in new[1:]:
+        if len(row) > 1:
+            row.insert(1, None)
+    new[1][1] = "dic"
+    old_doc, new_doc = _with_formulas(BASE), _doc(*new)
+    for row in new_doc["rows"]:
+        if normalize(row["cells"][0]["text"]).startswith("cliente "):
+            _cell_at(new_doc, row["r"], 4)["formula"] = f"=C{row['r'] + 1}+$D${row['r'] + 1}"
+    assert _types(compare(old_doc, new_doc, SCHEMA)) == ["column_inserted"]
+
+
 def test_a_formula_edited_after_a_row_insert_is_still_a_formula_change():
     new = BASE[:3] + [["Cliente C", "1", "2", "3"]] + BASE[3:]
     old_doc, new_doc = _with_formulas(BASE), _with_formulas(new)

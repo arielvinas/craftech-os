@@ -274,18 +274,21 @@ def _align(old_rows: list[dict], new_rows: list[dict], key_c: int):
     return pairs, moved, ambiguous
 
 
-def _shift(exact: dict[int, int], anchors: dict[int, int], present) -> Callable[[int], int]:
+def _shift(exact: dict[int, int], anchors: dict[int, int], present) -> Callable[..., int]:
     """Old index -> new index of a row or column, for references in formulas.
 
     exact holds every aligned index; anchors the ones that kept their order. An index with no
     pair lands where Google puts it: just before the next anchor, counting the empty indexes
-    in between (a deleted one takes the place of the next survivor).
+    in between (a deleted one takes the place of the next survivor). A deleted range end
+    shrinks the range instead: it lands just before the place of the next survivor.
     """
     olds = sorted(anchors)
 
-    def move(x: int) -> int:
+    def move(x: int, end: bool = False) -> int:
         if x in exact:
             return exact[x]
+        if end and x in present:
+            return move(x + 1) - 1
         i = bisect_left(olds, x)
         if i == len(olds):
             return x + (anchors[olds[-1]] - olds[-1] if olds else 0)
@@ -295,16 +298,17 @@ def _shift(exact: dict[int, int], anchors: dict[int, int], present) -> Callable[
 
 
 def _moved_formula(move_row, move_column):
-    def cell(m: re.Match) -> str:
-        col_abs, letters, row_abs, number = m.groups()
-        c = move_column(column_index(letters))
-        return f"{col_abs}{column_letters(c)}{row_abs}{move_row(int(number) - 1) + 1}"
+    def cell(text: str, end: bool) -> str:
+        col_abs, letters, row_abs, number = CELL_PARTS.fullmatch(text).groups()
+        c = move_column(column_index(letters), end)
+        return f"{col_abs}{column_letters(c)}{row_abs}{move_row(int(number) - 1, end) + 1}"
 
     def reference(m: re.Match) -> str:
         if m.group(1) or m.group(2):
             # A text, or a reference to another tab: Google leaves it as it was.
             return m.group(0)
-        return CELL_PARTS.sub(cell, m.group(0))
+        start, _, end = m.group(3).partition(":")
+        return cell(start, False) + (f":{cell(end, True)}" if end else "")
 
     return lambda formula: REFERENCE.sub(reference, formula)
 

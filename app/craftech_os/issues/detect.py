@@ -27,7 +27,7 @@ def find(doc: dict, schema: dict | None) -> list[tuple[str, str, dict]]:
     header = next(row["cells"] for _, rows in tab_blocks for row in rows if row["r"] == header_r)
     colors: dict[str, list[str]] = {}
     found = []
-    for _, rows in tab_blocks[1:]:
+    for block, rows in tab_blocks[1:]:
         # The first row of each block is the header or the row that opens the block.
         for row in rows[1:]:
             for c, cell in sorted(row["cells"].items()):
@@ -42,7 +42,7 @@ def find(doc: dict, schema: dict | None) -> list[tuple[str, str, dict]]:
                         # Rule R26: a repeated key is another series of the same client.
                         where += f" ({row['ordinal']})"
                     column = value(header.get(c)) or column_letters(c)
-                    found.append(("valor_ilegible", f"{where}:{column}", {"cell_ref": ref}))
+                    found.append(("valor_ilegible", f"{block}:{where}:{column}", {"cell_ref": ref}))
     found += [
         ("color_desconocido", color, {"cells": len(refs), "sample": refs[:SAMPLE_REFS]})
         for color, refs in sorted(colors.items())

@@ -222,7 +222,7 @@ def test_text_in_the_month_grid_is_an_unreadable_value(db, env, fake):
     _set(fake, rows)
     assert _import(env) == 0
     assert _issues(db, "valor_ilegible") == [
-        (f"{_tab_id(db)}:cliente a:feb", {"cell_ref": "C4"}, "abierto")
+        (f"{_tab_id(db)}:General:cliente a:feb", {"cell_ref": "C4"}, "abierto")
     ]
 
 
@@ -233,8 +233,19 @@ def test_unreadable_values_of_two_rows_with_the_same_key_are_two_problems(db, en
     _set(fake, rows)
     assert _import(env) == 0
     assert sorted(key for key, _, _ in _issues(db, "valor_ilegible")) == [
-        f"{_tab_id(db)}:cliente a (2):feb",
-        f"{_tab_id(db)}:cliente a:feb",
+        f"{_tab_id(db)}:General:cliente a (2):feb",
+        f"{_tab_id(db)}:General:cliente a:feb",
+    ]
+
+
+def test_unreadable_values_with_the_same_key_in_two_blocks_are_two_problems(db, env, fake):
+    rows = [list(r) for r in BASE] + [["Cliente A", "1", "n/d", "3"]]
+    rows[3][2] = "814,8"
+    _set(fake, rows)
+    assert _import(env) == 0
+    assert sorted(key for key, _, _ in _issues(db, "valor_ilegible")) == [
+        f"{_tab_id(db)}:General:cliente a:feb",
+        f"{_tab_id(db)}:Total Ingresos:cliente a:feb",
     ]
 
 
