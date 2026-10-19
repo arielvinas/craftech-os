@@ -52,5 +52,21 @@ services:
       postgres:
         condition: service_healthy
 
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    command: ["craftech-os", "web", "--host", "0.0.0.0"]
+    restart: unless-stopped
+    # No login in the v0: reachable only from this laptop.
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DATABASE_URL: postgresql://craftech_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TZ: America/Argentina/Buenos_Aires
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   db:
