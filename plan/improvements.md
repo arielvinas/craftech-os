@@ -10,6 +10,6 @@
 - [ ] [backups] Un archivo ajeno con el patrón craftech-os-*.dump en la carpeta de backups ocupa uno de los 14 lugares y hace borrar un dump real — QA T-003 r1 (F2)
 - [ ] [worker] Un pedido read-now queda pendiente para siempre si la planilla pierde su drive_id — QA T-003 r1 (F3)
 - [ ] [datos] El documento del snapshot (T-002) descarta las celdas vacías que solo tienen color de fondo, así que color_desconocido no ve #c9daf8 ni #d0e0e3 de la pregunta F-05; decidir si conservarlas — QA T-004 r1 (F5)
-- [ ] [diff] Borrar la última fila de un rango sumado (=SUM(B4:B5) → =SUM(B4:B4)) deja cambios formula falsos; raro (23 en Pagos de SleakOps Total sobre ~500 borrados simulados) — QA T-004 r2 (hallazgo 1)
-- [ ] [test-coverage] El corrimiento de columnas en fórmulas del diff no tiene test; si se rompe, una columna insertada daría hasta 1091 formula falsos con la suite en verde — QA T-004 r2 (hallazgo 2)
+- [x] [diff] Borrar la última fila de un rango sumado (=SUM(B4:B5) → =SUM(B4:B4)) deja cambios formula falsos; raro (23 en Pagos de SleakOps Total sobre ~500 borrados simulados) — QA T-004 r2 (hallazgo 1) — resuelto en PR #4 (CodeRabbit)
+- [x] [test-coverage] El corrimiento de columnas en fórmulas del diff no tiene test; si se rompe, una columna insertada daría hasta 1091 formula falsos con la suite en verde — QA T-004 r2 (hallazgo 2) — resuelto en PR #4 (CodeRabbit)
 - [ ] [test-coverage] El corrimiento de referencias a filas vacías debajo de los datos no tiene test — QA T-004 r2 (hallazgo 3, nit)
