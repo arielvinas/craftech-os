@@ -1,7 +1,7 @@
 ---
 id: T-009
 title: Clientes canónicos: razones sociales, clientes y aliases, con sus cargadores, y lectura que conserva celdas con solo color
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: [T-008]
