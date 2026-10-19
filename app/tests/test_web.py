@@ -16,7 +16,7 @@ SCRIPT = "<script>alert(1)</script>"
 def client(db, monkeypatch):
     migrate(db)
     monkeypatch.setenv("DATABASE_URL", db.info.dsn + " password=" + (db.info.password or ""))
-    return TestClient(web.app, raise_server_exceptions=False)
+    return TestClient(web.app, base_url="http://127.0.0.1", raise_server_exceptions=False)
 
 
 def _seed(db) -> dict:
@@ -158,9 +158,23 @@ def test_invalid_filter_is_400_without_the_database(monkeypatch, path):
         raise AssertionError("the database was reached")
 
     monkeypatch.setattr(web, "_connect", no_database)
-    response = TestClient(web.app, raise_server_exceptions=False).get(path)
+    response = TestClient(web.app, base_url="http://127.0.0.1", raise_server_exceptions=False).get(
+        path
+    )
     assert response.status_code == 400
     assert "Filtro inválido" in response.text
+
+
+def test_foreign_host_is_refused_without_the_database(monkeypatch):
+    def no_database():
+        raise AssertionError("the database was reached")
+
+    monkeypatch.setattr(web, "_connect", no_database)
+    rebound = TestClient(web.app, base_url="http://attacker.example", raise_server_exceptions=False)
+    assert rebound.get("/cambios").status_code == 400
+    assert rebound.post("/fuentes/1/leer-ahora").status_code == 400
+    local = TestClient(web.app, base_url="http://localhost:8000", raise_server_exceptions=False)
+    assert local.get("/static/style.css").status_code == 200
 
 
 def test_missing_rows_are_404_without_traceback(db, client):
@@ -177,7 +191,9 @@ def test_server_error_page_has_no_traceback(monkeypatch):
         raise RuntimeError("secret detail")
 
     monkeypatch.setattr(web, "_connect", broken)
-    response = TestClient(web.app, raise_server_exceptions=False).get("/fuentes")
+    response = TestClient(web.app, base_url="http://127.0.0.1", raise_server_exceptions=False).get(
+        "/fuentes"
+    )
     assert response.status_code == 500
     assert "secret detail" not in response.text and "Traceback" not in response.text
 

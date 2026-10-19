@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from craftech_os.web import queries
 
@@ -57,6 +58,8 @@ env.tests["hex_color"] = lambda v: bool(v and HEX_COLOR.match(v))
 templates = Jinja2Templates(env=env)
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+# No login: a foreign Host header means DNS rebinding, so only local names are served.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 
