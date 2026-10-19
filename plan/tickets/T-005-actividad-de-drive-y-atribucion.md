@@ -57,3 +57,7 @@ Verificado en el repo tras T-004: `cell_change` tiene `window_start`, `window_en
 - Autoría por celda (imposible sin script en la planilla; descartado).
 - Cambiar la fecha de un cobro o de cualquier hecho (etapa B).
 - Alertas o resumen de "quién tocó qué" por Slack (etapa D).
+
+## Decisions
+
+- 2026-10-19 — **Ventana de atribución: Drive Activity agrupa ediciones en tandas ~3 min y les pone hora 1,5–2,5 min después de la modificación; la ventana (window_start, window_end] atribuye mal** → (a) Ensanchar: contar actividad en (window_start, window_end + 5 min]; atribuir solo cuando ya se leyó la actividad posterior a window_end + 5 min. Nunca da cierta a la persona equivocada.
