@@ -233,7 +233,7 @@ def test_a_request_for_a_source_google_cannot_answer_stays_pending(db, env, fake
 
 def _pg_dump(calls, fail=False):
     def run(cmd, **kwargs):
-        calls.append(cmd)
+        calls.append((cmd, kwargs["env"]))
         if fail:
             raise subprocess.CalledProcessError(1, cmd[0], stderr="pg_dump: error: no space")
         path = cmd[cmd.index("--file") + 1]
@@ -256,9 +256,11 @@ def test_dump_keeps_the_last_fourteen(db, env, tmp_path, monkeypatch, clock):
     (backups / "notes.txt").write_text("not a dump")
     calls = []
     monkeypatch.setattr(subprocess, "run", _pg_dump(calls))
-    path = worker.dump(db, "postgresql://u@h/d", backups, clock.now)
+    path = worker.dump(db, "postgresql://u:secret@h/d", backups, clock.now)
     assert path == backups / "craftech-os-2026-10-18.dump"
-    assert calls[0][:2] == ["pg_dump", "--format=custom"]
+    cmd, child_env = calls[0]
+    assert cmd[:2] == ["pg_dump", "--format=custom"]
+    assert "secret" not in " ".join(cmd) and child_env["PGPASSWORD"] == "secret"
     names = _dumps(backups)
     assert len(names) == 15 and "notes.txt" in names
     assert names[0] == "craftech-os-2026-09-03.dump" and names[-2] == path.name

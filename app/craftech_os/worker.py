@@ -7,6 +7,7 @@ After the tick, a pg_dump of the database once a day. Events and printed lines c
 identifiers and counts, never cell values.
 """
 
+import os
 import subprocess
 import sys
 import time
@@ -14,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from craftech_os import events
 from craftech_os.ingest import importer
@@ -141,19 +143,26 @@ def dump(conn: psycopg.Connection, url: str, directory: Path, now=_now) -> Path:
     started = time.monotonic()
     path = directory / f"craftech-os-{now():%Y-%m-%d}.dump"
     partial = directory / "craftech-os.partial"
+    # The password goes in pg_dump's environment, not its command line (visible with ps).
+    params = conninfo_to_dict(url)
+    env = dict(os.environ)
+    if "password" in params:
+        env["PGPASSWORD"] = params.pop("password")
+    dbname = make_conninfo(**params)
     try:
         subprocess.run(
-            ["pg_dump", "--format=custom", "--file", str(partial), "--dbname", url],
+            ["pg_dump", "--format=custom", "--file", str(partial), "--dbname", dbname],
             check=True,
             capture_output=True,
             text=True,
+            env=env,
         )
         partial.replace(path)
         for old in _dumps(directory)[:-DUMP_KEEP]:
             old.unlink()
         size_bytes = path.stat().st_size
     except subprocess.CalledProcessError as e:
-        # The command line has the database password: only pg_dump's own last line is kept.
+        # Only pg_dump's own last line is kept: it names the failure without the full output.
         lines = e.stderr.strip().splitlines()
         error = lines[-1] if lines else f"pg_dump exited with {e.returncode}"
         partial.unlink(missing_ok=True)
