@@ -1,13 +1,13 @@
 ---
 id: T-006
 title: Web local de solo visualización: pantallas Cambios, Problemas y Fuentes, con botón "leer ahora"
-status: todo
+status: in-progress
 priority: high
 lane: ui
 depends_on: [T-004]
 effort: M
 milestone: A
-branch:
+branch: arielvinas/t-006
 ---
 
 ## Context
