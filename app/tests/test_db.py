@@ -28,6 +28,7 @@ MIGRATIONS = [
     "0004_cell_change_issue.sql",
     "0005_drive_activity.sql",
     "0006_mcp_roles_views.sql",
+    "0007_mcp_cells.sql",
 ]
 
 

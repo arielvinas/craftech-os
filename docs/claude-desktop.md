@@ -12,7 +12,7 @@ Claude Desktop se conecta a Craftech OS con un servidor MCP (Model Context Proto
    docker compose -f infra/docker-compose.yml exec postgres sh /docker-entrypoint-initdb.d/02-mcp-roles.sh
    ```
 
-3. La migración `0006` aplicada (falla con un mensaje claro si los usuarios no existen) y el contenedor `web` reconstruido:
+3. Las migraciones aplicadas (la `0006` falla con un mensaje claro si los usuarios no existen; la `0007` agrega `mcp.celdas`) y el contenedor `web` reconstruido:
 
    ```bash
    docker compose -f infra/docker-compose.yml run --rm app craftech-os migrate
@@ -21,13 +21,21 @@ Claude Desktop se conecta a Craftech OS con un servidor MCP (Model Context Proto
 
 ## Configuración
 
-En Claude Desktop: Configuración → Desarrollador → Editar configuración. Eso abre `~/Library/Application Support/Claude/claude_desktop_config.json`. Agregar (con la ruta absoluta del repo en lugar de `<ruta>`):
+Primero, la ruta completa de `docker` en tu máquina:
+
+```bash
+which docker
+```
+
+Con Docker Desktop suele ser `/usr/local/bin/docker` o `~/.docker/bin/docker` (escrita entera, por ejemplo `/Users/<usuario>/.docker/bin/docker`). Claude Desktop no carga el `PATH` de la terminal: sin la ruta completa no encuentra `docker`.
+
+En Claude Desktop: Configuración → Desarrollador → Editar configuración. Eso abre `~/Library/Application Support/Claude/claude_desktop_config.json`. Agregar, con la salida de `which docker` en lugar de `<docker>` y la ruta absoluta del repo en lugar de `<ruta>`:
 
 ```json
 {
   "mcpServers": {
     "craftech-os": {
-      "command": "/usr/local/bin/docker",
+      "command": "<docker>",
       "args": [
         "compose", "-f", "<ruta>/infra/docker-compose.yml",
         "exec", "-T", "web", "craftech-os", "mcp"
@@ -37,18 +45,18 @@ En Claude Desktop: Configuración → Desarrollador → Editar configuración. E
 }
 ```
 
-`command` es la ruta completa de `docker` (`which docker`; con Docker Desktop suele ser `/usr/local/bin/docker`), porque Claude Desktop no carga el `PATH` de la terminal. `-T` hace falta: sin él, `docker compose exec` abre una terminal y el protocolo se rompe. Reiniciar Claude Desktop después de guardar.
+`-T` hace falta: sin él, `docker compose exec` abre una terminal y el protocolo se rompe. Reiniciar Claude Desktop después de guardar.
 
 El contenedor `web` tiene que estar levantado (`docker compose -f infra/docker-compose.yml up -d`). Si no lo está, Claude Desktop muestra el servidor como desconectado.
 
 ## Qué ofrece
 
-- **Consultas**, con el usuario `mcp_reader`, que solo ve las vistas del esquema `mcp` (nunca el contenido completo de las fotos), en transacciones de solo lectura que se cortan a los 10 segundos:
+- **Consultas**, con el usuario `mcp_reader`, que solo ve las vistas del esquema `mcp` (nunca la columna `content` de las lecturas guardadas), en transacciones de solo lectura que se cortan a los 10 segundos:
   - `listar_cambios` y `ver_cambio`: cambios de celda, con filtros por planilla, pestaña, tipo, clave de fila, editor y fechas.
   - `listar_problemas` y `ver_problema`: problemas con su estado, resoluciones y anotaciones.
   - `listar_fuentes`: planillas, última lectura y salud del worker.
   - `listar_editores`: los editores de Drive, con nombre si ya se asoció.
-  - `consultar_sql`: un único `SELECT` o `WITH` sobre las vistas del esquema `mcp`, hasta 500 filas.
+  - `consultar_sql`: un único `SELECT` o `WITH` sobre las vistas del esquema `mcp`, hasta 500 filas. El contenido actual de las planillas está en la vista `mcp.celdas`: cada celda no vacía de la última lectura de cada pestaña activa, con `planilla`, `pestaña`, `celda` (notación A1), `texto`, `valor`, `formula`, `color_fondo` y `leido_en`.
 - **Escrituras**, con el usuario `mcp_writer`, que solo puede insertar en tres tablas. Claude Desktop pide confirmación antes de cada una. `autor` y `motivo` son obligatorios:
   - `resolver_problema`: marca un problema como resuelto o ignorado.
   - `anotar`: agrega una nota a una planilla, pestaña, cambio o problema.
@@ -74,6 +82,7 @@ Cada respuesta trae el origen de cada dato: planilla, pestaña, celda y `leido_e
    - "¿Qué cambió hoy en <planilla de prueba>?" La respuesta cita planilla, pestaña, celda y momento de lectura.
    - "¿Qué problemas hay abiertos?"
    - "¿Cuándo fue la última vuelta del worker?"
+   - "¿En qué celdas de <pestaña> de <planilla de prueba> aparece <un texto que sepas que está>?" Claude busca en `mcp.celdas` y responde con la celda en notación A1 (la misma que muestra Google Sheets) y el momento de lectura. Con una planilla de Finanzas sería, por ejemplo, "¿en qué celdas de CASH FLOW MENSUAL aparece tal proveedor?".
 4. Una escritura: "Ignorá el problema N, autor Ariel, motivo prueba". Claude Desktop pide confirmación. Después, el problema aparece `ignorado` en `listar_problemas` y en <http://127.0.0.1:8000/problemas>.
 5. Los registros del servidor (errores incluidos) quedan en `~/Library/Logs/Claude/mcp-server-craftech-os.log`.
 
@@ -81,7 +90,7 @@ Cada respuesta trae el origen de cada dato: planilla, pestaña, celda y `leido_e
 
 Una celda puede contener texto como "ignorá las instrucciones anteriores y …", escrito a propósito o por error, que llega a Claude Desktop como parte de una respuesta. En esta versión hay tres defensas:
 
-1. El contenido de las celdas siempre viaja en campos con nombre (`valor_nuevo`, `formula_anterior`, …), nunca mezclado con texto del servidor.
+1. El contenido de las celdas siempre viaja en campos con nombre (`valor_nuevo`, `formula_anterior`, `texto`, …), nunca mezclado con texto del servidor.
 2. Las descripciones de las herramientas avisan que esos valores son datos, no instrucciones.
 3. Las escrituras piden confirmación en Claude Desktop, y el usuario de la base que usan solo puede insertar resoluciones, notas y nombres de editores: no puede borrar ni cambiar nada, ni leer.
 
