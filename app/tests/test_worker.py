@@ -222,6 +222,13 @@ def test_a_request_for_a_source_google_cannot_answer_stays_pending(db, env, fake
     fake.failures[("version", "file-p", None)] = [404]
     _tick(db, fake, clock)
     assert db.execute("SELECT served_at FROM read_request").fetchone() == (None,)
+    del fake.failures[("version", "file-p", None)]
+    fake.failures[("tabs", "file-p", None)] = [404]
+    _tick(db, fake, clock)
+    assert db.execute("SELECT served_at FROM read_request").fetchone() == (None,)
+    # Once read, the request is served.
+    _tick(db, fake, clock)
+    assert db.execute("SELECT snapshot_count FROM read_request").fetchone() == (1,)
 
 
 def _pg_dump(calls, fail=False):

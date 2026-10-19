@@ -76,7 +76,8 @@ def tick(conn: psycopg.Connection, google: Google, now=_now, sleep=time.sleep) -
         " WHERE drive_id IS NOT NULL ORDER BY id"
     ).fetchall()
     counts = {"checked": 0, "read": 0, "stored": 0}
-    # Requested sources go first: they are read without waiting.
+    # Requested sources go first: they are read without waiting. A request is served once
+    # every tab was read; until then it stays pending and is retried next tick.
     for source_id, title, drive_id, default_class in sorted(
         rows, key=lambda r: r[0] not in pending
     ):
@@ -106,7 +107,7 @@ def tick(conn: psycopg.Connection, google: Google, now=_now, sleep=time.sleep) -
         result = importer.import_source(conn, google, source, READ_CLASSES, version["version"])
         counts["read"] += 1
         counts["stored"] += result["stored"]
-        if requested:
+        if requested and not result["failed"]:
             conn.execute(
                 "UPDATE read_request SET served_at = now(), snapshot_count = %s WHERE id = %s",
                 (result["stored"], pending[source_id]),
