@@ -128,15 +128,11 @@ def test_attribution_shows_unattributed_then_the_profile_name(db, client):
     _seed(db)
     html = client.get("/cambios").text
     assert "sin atribuir" in html and "people/111" in html
-    # editor_profile arrives with T-005; once it exists, its latest name per actor is shown.
+    # Once an editor is associated with a person, the latest name per actor is shown.
     db.execute(
-        "CREATE TABLE editor_profile (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,"
-        " actor_id text, person_name text, created_at timestamptz DEFAULT now())"
-    )
-    db.execute(
-        "INSERT INTO editor_profile (actor_id, person_name, created_at)"
-        " VALUES ('people/111', 'Persona Vieja', now() - interval '1 day'),"
-        " ('people/111', 'Persona Ficticia', now())"
+        "INSERT INTO editor_profile (actor_id, person_name, author, reason, created_at)"
+        " VALUES ('people/111', 'Persona Vieja', 'ariel', 'prueba', now() - interval '1 day'),"
+        " ('people/111', 'Persona Ficticia', 'ariel', 'prueba', now())"
     )
     html = client.get("/cambios").text
     assert "Persona Ficticia" in html and "Persona Vieja" not in html

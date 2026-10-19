@@ -8,7 +8,10 @@ from craftech_os import cli, sources
 from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 
 TABLES = [
+    "annotation",
     "cell_change",
+    "drive_activity",
+    "editor_profile",
     "issue",
     "issue_resolution",
     "read_request",
@@ -23,6 +26,7 @@ MIGRATIONS = [
     "0002_snapshot.sql",
     "0003_read_request.sql",
     "0004_cell_change_issue.sql",
+    "0005_drive_activity.sql",
 ]
 
 

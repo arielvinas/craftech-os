@@ -109,6 +109,24 @@ Para recalcular a mano las diferencias entre las dos últimas fotos de una pesta
 docker compose -f infra/docker-compose.yml run --rm app craftech-os diff --tab "Facturación - Craftech Total" "Pagos" [--from <id> --to <id>]
 ```
 
+## Quién hizo cada cambio
+
+Google no dice quién editó cada celda; la Drive Activity API (alcance `drive.activity.readonly`, de solo lectura) dice quién editó el archivo y cuándo. Cada actividad se guarda una sola vez en `drive_activity`, con el identificador opaco del editor (`people/...`, o `deletedUser` para cualquier cuenta eliminada), nunca su nombre. Un cambio se atribuye a los editores con ediciones entre la versión anterior y cinco minutos después de la nueva (Google registra las ediciones con uno o dos minutos de demora): uno solo es `cierta` (y `attributed_at` es la hora de su última edición), varios es `una_de`, ninguno es `sin_datos`. Los cambios de pestaña no se atribuyen. La vista `v_attribution_stats` da, por planilla y día, cuántos salieron de cada forma.
+
+El worker trae la actividad de cada planilla que leyó, de las que tienen cambios esperando atribución y de las que no se consultan hace una hora, y atribuye al final de la vuelta (eventos `activity_read`, `activity_failed`, `attributed`). Para traer toda la historia la primera vez (`--source "<título>"` para una sola planilla):
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app craftech-os drive import
+```
+
+Los editores aparecen como "editor sin identificar #N", numerados por orden de primera aparición (el número no cambia). Para ver cada uno con sus ediciones, planillas, horas habituales y fechas:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app craftech-os editors
+```
+
+Para ponerle nombre, una fila en `editor_profile` (`actor_id`, `person_name`, `author`, `reason`); la última por editor manda y se ve en la vista `v_editor`. Las notas sobre una planilla, pestaña, cambio o problema van a `annotation`.
+
 ## Web local
 
 ```bash
@@ -117,7 +135,7 @@ docker compose -f infra/docker-compose.yml up -d    # postgres, worker y web
 
 Abre en <http://127.0.0.1:8000/> (solo desde esta laptop: no hay login). Es de solo lectura, salvo el botón "leer ahora":
 
-- **Cambios:** los `cell_change` más nuevos primero, de a 100, con filtros por planilla, pestaña, tipo, clave de fila, editor (o "sin atribuir") y fechas, y un resumen por día y por tipo. Cada fila abre su detalle con fórmulas y colores anterior y nuevo. El editor se muestra con el nombre de `editor_profile` cuando la tabla existe.
+- **Cambios:** los `cell_change` más nuevos primero, de a 100, con filtros por planilla, pestaña, tipo, clave de fila, editor (o "sin atribuir") y fechas, y un resumen por día y por tipo. Cada fila abre su detalle con fórmulas y colores anterior y nuevo. El editor se muestra con el nombre de `editor_profile` si tiene uno.
 - **Problemas:** los de `v_issue` con su estado, dueño y última resolución; filtros por tipo, estado y planilla. Se resuelven desde Claude Desktop, no desde la web.
 - **Fuentes:** la salud del sistema (última vuelta del worker, intervalo máximo de las últimas 24 horas, último dump con aviso si tiene más de 48 horas, tamaño de la base, reintentos de hoy) y cada planilla con sus pestañas. "Leer ahora" crea un pedido pendiente como `read-now`; si ya hay uno, no crea otro.
 

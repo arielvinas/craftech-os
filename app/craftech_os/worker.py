@@ -3,8 +3,9 @@
 One process, one loop. Each tick serves the pending read requests, checks the Drive version
 of every source, waits until a changed spreadsheet has had no edit for two minutes (ten at
 most), and reads its CARGA and DERIVADA tabs: a snapshot is stored only where the hash changed.
-After the tick, a pg_dump of the database once a day. Events and printed lines carry
-identifiers and counts, never cell values.
+Then it fetches the Drive activity of each source read, or with changes waiting for it, or not
+fetched in an hour, and attributes the changes. After the tick, a pg_dump of the database once
+a day. Events and printed lines carry identifiers and counts, never cell values.
 """
 
 import os
@@ -17,14 +18,15 @@ from pathlib import Path
 import psycopg
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
-from craftech_os import events
-from craftech_os.ingest import importer
+from craftech_os import attribution, events
+from craftech_os.ingest import drive_activity, importer
 from craftech_os.ingest.google import Google
 
 TICK_S = 300
 POLL_S = 30
 QUIET = timedelta(minutes=2)
 CAP = timedelta(minutes=10)
+ACTIVITY_EVERY = timedelta(hours=1)
 READ_CLASSES = ("CARGA", "DERIVADA")
 DUMP_HOUR = 3
 DUMP_KEEP = 14
@@ -66,6 +68,23 @@ def _wait_until_quiet(conn, google, source_id, file_id, version, now, sleep) -> 
     return version
 
 
+def _activity_due(conn, source_id, now) -> bool:
+    """True if the source has a change waiting for later activity, or none fetched in an hour."""
+    (last,) = conn.execute(
+        "SELECT max((details->>'through')::timestamptz) FROM system_event"
+        " WHERE kind = 'activity_read' AND source_id = %s",
+        (source_id,),
+    ).fetchone()
+    if last is None or now - last >= ACTIVITY_EVERY:
+        return True
+    return conn.execute(
+        "SELECT EXISTS (SELECT FROM cell_change c JOIN source_tab t ON t.id = c.source_tab_id"
+        " WHERE t.source_id = %s AND c.attribution_certainty IS NULL"
+        " AND c.window_end + %s < %s)",
+        (source_id, attribution.MARGIN, now),
+    ).fetchone()[0]
+
+
 def tick(conn: psycopg.Connection, google: Google, now=_now, sleep=time.sleep) -> dict:
     """One pass over every source with a drive_id. Returns {checked, read, stored}."""
     started = now()
@@ -78,6 +97,7 @@ def tick(conn: psycopg.Connection, google: Google, now=_now, sleep=time.sleep) -
         " WHERE drive_id IS NOT NULL ORDER BY id"
     ).fetchall()
     counts = {"checked": 0, "read": 0, "stored": 0}
+    read = set()
     # Requested sources go first: they are read without waiting. A request is served once
     # every tab was read; until then it stays pending and is retried next tick.
     for source_id, title, drive_id, default_class in sorted(
@@ -109,11 +129,17 @@ def tick(conn: psycopg.Connection, google: Google, now=_now, sleep=time.sleep) -
         result = importer.import_source(conn, google, source, READ_CLASSES, version["version"])
         counts["read"] += 1
         counts["stored"] += result["stored"]
+        read.add(source_id)
         if requested and not result["failed"]:
             conn.execute(
                 "UPDATE read_request SET served_at = now(), snapshot_count = %s WHERE id = %s",
                 (result["stored"], pending[source_id]),
             )
+    for source_id, _, drive_id, _ in rows:
+        if source_id in read or _activity_due(conn, source_id, now()):
+            fetched = drive_activity.fetch(conn, google, source_id, drive_id, now)
+            if fetched:
+                attribution.attribute(conn, source_id, fetched["through"])
     duration_ms = round((now() - started).total_seconds() * 1000)
     events.record(conn, "worker_tick", duration_ms=duration_ms, **counts)
     print(
