@@ -162,6 +162,16 @@ def _events(db, kind):
     ).fetchall()
 
 
+def _unclassified(db):
+    return [
+        name
+        for (name,) in db.execute(
+            "SELECT t.name FROM issue i JOIN source_tab t ON t.id = i.source_tab_id"
+            " WHERE i.issue_type = 'pestana_sin_clasificar' ORDER BY i.id"
+        )
+    ]
+
+
 def _snapshots(db):
     return db.execute("SELECT count(*) FROM snapshot").fetchone()[0]
 
@@ -187,7 +197,7 @@ def test_import_stores_one_snapshot_per_tab_and_registers_tabs(db, env, fake, ca
         (name, version, True, True, True, "lectura", 64, 1, 2, 2, "#ff0000", True, 1)
         for name, version in [("Cobros", 41), ("Nueva", 41), ("Resumen", 7)]
     ]
-    assert [e[2]["tab"] for e in _events(db, "tab_unclassified")] == ["Nueva"]
+    assert _unclassified(db) == ["Nueva"]
     assert {e[2]["tab"] for e in _events(db, "tab_missing")} == {"Borrada"}
     reads = _events(db, "tab_read")
     assert len(reads) == 3
@@ -233,7 +243,7 @@ def test_a_tab_renamed_in_google_and_in_the_list_keeps_its_class(db, env, fake):
     assert _import(env) == 0
     assert ("Cobros 2026", 11, "CARGA", True) in _tabs(db)
     assert ("Cobros", None, "CARGA", False) in _tabs(db)
-    assert [e[2]["tab"] for e in _events(db, "tab_unclassified")] == ["Nueva"]
+    assert _unclassified(db) == ["Nueva"]
     assert {e[2]["tab"] for e in _events(db, "tab_missing")} == {"Borrada"}
 
 

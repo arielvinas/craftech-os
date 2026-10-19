@@ -130,7 +130,7 @@ def _positional(old_doc: dict, new_doc: dict) -> list[dict]:
     return changes
 
 
-def _blocks(doc: dict, schema: dict) -> tuple[int, list[tuple[str, list[dict]]]] | None:
+def blocks(doc: dict, schema: dict) -> tuple[int, list[tuple[str, list[dict]]]] | None:
     """(header row, [(block name, rows)]), or None when the header row is not there.
 
     Each row is {r, cells: {c: cell}, key, ordinal}. The header row opens the block named
@@ -147,7 +147,7 @@ def _blocks(doc: dict, schema: dict) -> tuple[int, list[tuple[str, list[dict]]]]
     header_r = next((row["r"] for row in rows if row["key"] == header), None)
     if header_r is None:
         return None
-    blocks, names = [(BEFORE_HEADER, [])], Counter()
+    split, names = [(BEFORE_HEADER, [])], Counter()
     for row in rows:
         name = None
         if row["r"] == header_r:
@@ -156,14 +156,14 @@ def _blocks(doc: dict, schema: dict) -> tuple[int, list[tuple[str, list[dict]]]]
             name = openers[row["key"]]
         if name is not None:
             names[name] += 1
-            blocks.append((name if names[name] == 1 else f"{name} ({names[name]})", []))
-        blocks[-1][1].append(row)
-    for _, block_rows in blocks:
+            split.append((name if names[name] == 1 else f"{name} ({names[name]})", []))
+        split[-1][1].append(row)
+    for _, block_rows in split:
         seen = Counter()
         for row in block_rows:
             seen[row["key"]] += 1
             row["ordinal"] = seen[row["key"]] if row["key"] is not None else None
-    return header_r, blocks
+    return header_r, split
 
 
 def _columns(old_header: dict, new_header: dict, width: int):
@@ -258,7 +258,7 @@ def _row_fields(block: str, row: dict) -> dict:
 
 
 def _schema_changes(old_doc: dict, new_doc: dict, schema: dict):
-    old_split, new_split = _blocks(old_doc, schema), _blocks(new_doc, schema)
+    old_split, new_split = blocks(old_doc, schema), blocks(new_doc, schema)
     if old_split is None or new_split is None:
         return None
     (old_header_r, old_blocks), (new_header_r, new_blocks) = old_split, new_split

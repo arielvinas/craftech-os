@@ -10,8 +10,10 @@ import psycopg
 from googleapiclient.errors import HttpError
 
 from craftech_os import events
+from craftech_os.diff import store
 from craftech_os.ingest import document
 from craftech_os.ingest.google import Google, GoogleError, status
+from craftech_os.issues import detect as issue_detect
 
 UNCLASSIFIED = "SIN_CLASIFICAR"
 READ_ERRORS = (
@@ -44,22 +46,33 @@ def retry_logger(conn, source_id, source_tab_id=None):
     return on_retry
 
 
+def _tab_change(conn, tab_id, change_type, old_name=None, new_name=None) -> None:
+    conn.execute(
+        "INSERT INTO cell_change (source_tab_id, change_type, old_value, new_value)"
+        " VALUES (%s, %s, %s, %s)",
+        (tab_id, change_type, old_name, new_name),
+    )
+
+
 def register_tabs(
     conn: psycopg.Connection, source_id: int, default_class: str | None, google_tabs: list[dict]
 ) -> list[tuple[int, str]]:
     """Match Google's tabs with source_tab (by sheet_id, else by name) and store their sheet_id.
 
     A Google tab with no active row is registered with the source's all_tabs class, or
-    SIN_CLASIFICAR. An active row Google no longer has becomes inactive.
+    SIN_CLASIFICAR with a pestana_sin_clasificar problem. An active row Google no longer has
+    becomes inactive. New, deleted and renamed tabs are recorded in cell_change.
     Returns (source_tab_id, Google title) of every tab Google has, in Google's order.
     """
     rows = conn.execute(
-        "SELECT id, sheet_id, name, active FROM source_tab WHERE source_id = %s", (source_id,)
+        "SELECT id, sheet_id, name, active, class FROM source_tab WHERE source_id = %s",
+        (source_id,),
     ).fetchall()
     google_ids = {props["sheetId"] for props in google_tabs}
     by_sheet = {r[1]: r for r in rows if r[1] is not None}
     # A row whose sheet_id Google no longer has (the tab was recreated) matches by name too.
     by_name = {r[2]: r for r in rows if r[1] is None or r[1] not in google_ids}
+    names = {r[2] for r in rows}
     found = []
     for props in google_tabs:
         sheet_id, title = props["sheetId"], props["title"]
@@ -76,25 +89,50 @@ def register_tabs(
                 " VALUES (%s, %s, %s, %s) RETURNING id",
                 (source_id, sheet_id, title, cls),
             ).fetchone()
-        elif not row[3]:
-            tab_id = row[0]
-            conn.execute(
-                "UPDATE source_tab SET sheet_id = %s, class = %s, active = true WHERE id = %s",
-                (sheet_id, cls, tab_id),
-            )
+            names.add(title)
+            _tab_change(conn, tab_id, "tab_added", new_name=title)
         else:
-            tab_id, cls = row[0], None
-            conn.execute("UPDATE source_tab SET sheet_id = %s WHERE id = %s", (sheet_id, tab_id))
+            tab_id = row[0]
+            if row[1] is not None and row[1] != sheet_id:
+                # Same name, another sheet_id: the tab was deleted and created again.
+                _tab_change(conn, tab_id, "tab_deleted", old_name=row[2])
+                _tab_change(conn, tab_id, "tab_added", new_name=title)
+            elif row[1] == sheet_id and row[2] != title:
+                if title in names:
+                    events.record(
+                        conn, "tab_rename_blocked", source_id=source_id, source_tab_id=tab_id
+                    )
+                else:
+                    conn.execute("UPDATE source_tab SET name = %s WHERE id = %s", (title, tab_id))
+                    names.add(title)
+                    _tab_change(conn, tab_id, "tab_renamed", old_name=row[2], new_name=title)
+            if not row[3]:
+                conn.execute(
+                    "UPDATE source_tab SET sheet_id = %s, class = %s, active = true WHERE id = %s",
+                    (sheet_id, cls, tab_id),
+                )
+            else:
+                cls = row[4]
+                conn.execute(
+                    "UPDATE source_tab SET sheet_id = %s WHERE id = %s", (sheet_id, tab_id)
+                )
         if cls == UNCLASSIFIED:
-            events.record(
-                conn, "tab_unclassified", source_id=source_id, source_tab_id=tab_id, tab=title
+            issue_detect.upsert(
+                conn,
+                "pestana_sin_clasificar",
+                f"{source_id}:{sheet_id}",
+                source_id,
+                tab_id,
+                {"sheet_id": sheet_id},
             )
         found.append((tab_id, title))
     found_ids = {tab_id for tab_id, _ in found}
-    for tab_id, _, name, active in rows:
+    for tab_id, sheet_id, name, active, _ in rows:
         if active and tab_id not in found_ids:
             conn.execute("UPDATE source_tab SET active = false WHERE id = %s", (tab_id,))
             events.record(conn, "tab_missing", source_id=source_id, source_tab_id=tab_id, tab=name)
+            if sheet_id is not None:
+                _tab_change(conn, tab_id, "tab_deleted", old_name=name)
     return found
 
 
@@ -121,32 +159,37 @@ def read_tab(
     duration_ms = round((time.monotonic() - started) * 1000)
     content_hash = document.content_hash(serialized)
     last = conn.execute(
-        "SELECT content_hash FROM snapshot WHERE source_tab_id = %s"
+        "SELECT id, content_hash FROM snapshot WHERE source_tab_id = %s"
         " ORDER BY read_at DESC, id DESC LIMIT 1",
         (tab_id,),
     ).fetchone()
-    stored = last != (content_hash,)
+    stored = last is None or last[1] != content_hash
     cells = document.cell_count(doc)
     if stored:
         try:
-            conn.execute(
-                """
-                INSERT INTO snapshot (source_tab_id, drive_version, drive_modified_at,
-                    duration_ms, origin, content_hash, content, row_count, col_count, cell_count)
-                VALUES (%s, %s, %s, %s, 'lectura', %s, %s::jsonb, %s, %s, %s)
-                """,
-                (
-                    tab_id,
-                    drive_version,
-                    drive_modified_at,
-                    duration_ms,
-                    content_hash,
-                    serialized,
-                    doc["used"]["rows"],
-                    doc["used"]["cols"],
-                    cells,
-                ),
-            )
+            # The snapshot, its changes and its problems are stored together or not at all.
+            with conn.transaction():
+                (snapshot_id,) = conn.execute(
+                    """
+                    INSERT INTO snapshot (source_tab_id, drive_version, drive_modified_at,
+                        duration_ms, origin, content_hash, content, row_count, col_count,
+                        cell_count)
+                    VALUES (%s, %s, %s, %s, 'lectura', %s, %s::jsonb, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        tab_id,
+                        drive_version,
+                        drive_modified_at,
+                        duration_ms,
+                        content_hash,
+                        serialized,
+                        doc["used"]["rows"],
+                        doc["used"]["cols"],
+                        cells,
+                    ),
+                ).fetchone()
+                store.record(conn, source_id, tab_id, last and last[0], snapshot_id)
         except psycopg.DataError as e:
             events.record(
                 conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **error_details(e)
