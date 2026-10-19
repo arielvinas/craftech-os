@@ -10,6 +10,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from psycopg.conninfo import make_conninfo
 
+from craftech_os.diff.compare import a1
 from craftech_os.mcp import server as mcp_server
 from craftech_os.migrate import migrate
 
@@ -188,6 +189,8 @@ def test_the_writer_cannot_select_or_update(urls, db):
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute("SELECT * FROM mcp.changes")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute("SELECT * FROM mcp.celdas")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute("UPDATE annotation SET body = 'x'")
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute(
@@ -362,4 +365,93 @@ def test_the_catalog_describes_every_column_and_the_glossary_has_the_color_grid(
 
     catalog = anyio.run(read, "craftech://catalogo")
     assert "mcp.changes" in catalog and "Celda en notación A1" in catalog
+    assert "## mcp.celdas" in catalog and "`texto` (text)" in catalog
     assert "Grilla de colores" in anyio.run(read, "craftech://glosario")
+
+
+def _read(db, tab: int, rows: list, version: int = 1) -> int:
+    return db.execute(
+        "INSERT INTO snapshot (source_tab_id, drive_version, drive_modified_at, read_at,"
+        " duration_ms, origin, content_hash, content, row_count, col_count, cell_count)"
+        " VALUES (%s, %s, now(), now() + make_interval(mins => %s), 100, 'lectura', %s, %s,"
+        " 1, 1, 1) RETURNING id",
+        (tab, version, version, f"{version:064x}", json.dumps({"rows": rows})),
+    ).fetchone()[0]
+
+
+def _cell(c: int, text: str | None, **extra) -> dict:
+    return {"c": c, "text": text, "value": {"stringValue": text}, "bg": "#ffffff", **extra}
+
+
+def test_celdas_has_the_cells_of_the_last_read_with_their_a1_reference(server, db):
+    ids = _seed(db)
+    _read(db, ids["tab"], [{"r": 0, "cells": [_cell(0, "viejo")]}], version=3)
+    newest = _read(
+        db,
+        ids["tab"],
+        [
+            {
+                "r": 0,
+                "cells": [_cell(0, "Proveedor Ficticio"), _cell(2, None, value=None, bg="#ff9900")],
+            },
+            {
+                "r": 6,
+                "cells": [
+                    _cell(1, "1.500", value=1500, formula="=SUM(B1:B6)", bg="#00ffff"),
+                    _cell(26, "en AA"),
+                ],
+            },
+        ],
+        version=4,
+    )
+    other_tab = db.execute(
+        "INSERT INTO source_tab (source_id, sheet_id, name, class, active)"
+        " VALUES (%s, 2, 'Vieja', 'CARGA', false) RETURNING id",
+        (ids["source"],),
+    ).fetchone()[0]
+    _read(db, other_tab, [{"r": 0, "cells": [_cell(0, "Proveedor Ficticio")]}])
+
+    found = _call(
+        server,
+        "consultar_sql",
+        sql="SELECT planilla, pestaña, celda, fila, columna, texto, valor, formula, color_fondo,"
+        " lectura_id, leido_en FROM mcp.celdas ORDER BY fila, columna",
+    )
+    cells = [dict(zip(found["columnas"], row, strict=True)) for row in found["filas"]]
+    assert [(c["celda"], c["fila"], c["columna"], c["texto"]) for c in cells] == [
+        ("A1", 1, 1, "Proveedor Ficticio"),
+        ("C1", 1, 3, None),
+        ("B7", 7, 2, "1.500"),
+        ("AA7", 7, 27, "en AA"),
+    ]
+    assert {(c["planilla"], c["pestaña"], c["lectura_id"]) for c in cells} == {
+        ("Planilla de Prueba", "Facturación", newest)
+    }
+    assert all(c["leido_en"] for c in cells)
+    assert (cells[1]["valor"], cells[1]["color_fondo"]) == (None, "#ff9900")
+    assert (cells[2]["valor"], cells[2]["formula"], cells[2]["color_fondo"]) == (
+        1500,
+        "=SUM(B1:B6)",
+        "#00ffff",
+    )
+    assert (cells[0]["valor"], cells[0]["formula"]) == ({"stringValue": "Proveedor Ficticio"}, None)
+
+    search = _call(
+        server,
+        "consultar_sql",
+        sql="SELECT celda FROM mcp.celdas WHERE texto ILIKE '%ficticio%'",
+    )
+    assert search["filas"] == [["A1"]]
+
+
+def test_celdas_spells_every_sheets_column_like_google(db):
+    # Google Sheets stops at column ZZZ (18278 columns): every one of them, compared.
+    migrate(db)
+    tab = db.execute(
+        "WITH s AS (INSERT INTO source (title) VALUES ('P') RETURNING id)"
+        " INSERT INTO source_tab (source_id, name, class) SELECT id, 'T', 'CARGA' FROM s"
+        " RETURNING id"
+    ).fetchone()[0]
+    _read(db, tab, [{"r": 0, "cells": [_cell(c, "x") for c in range(18278)]}])
+    refs = [r[0] for r in db.execute("SELECT celda FROM mcp.celdas ORDER BY columna")]
+    assert refs == [a1(0, c) for c in range(18278)]
