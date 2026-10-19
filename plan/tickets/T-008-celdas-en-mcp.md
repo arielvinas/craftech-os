@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: Contenido actual de las celdas en el servidor MCP: vista de solo lectura sobre la última lectura de cada pestaña
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: []
