@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: Lectura continua: worker cada 5 minutos por número de versión, ventana de calma, "leer ahora" y dump diario
-status: todo
+status: in-progress
 priority: high
 lane: core
 depends_on: [T-002]
