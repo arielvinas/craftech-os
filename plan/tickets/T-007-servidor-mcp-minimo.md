@@ -1,7 +1,7 @@
 ---
 id: T-007
 title: Servidor MCP mínimo para Claude Desktop: consultas de solo lectura, tres acciones con autor y motivo, catálogo y glosario
-status: pr
+status: done
 priority: high
 lane: api
 depends_on: [T-005]
