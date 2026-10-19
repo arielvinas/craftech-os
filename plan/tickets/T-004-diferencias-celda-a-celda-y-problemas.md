@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: Diferencias celda a celda entre versiones, alineación de filas por clave y problemas con clave estable
-status: in-progress
+status: qa
 priority: high
 lane: core
 depends_on: [T-003]
@@ -52,16 +52,16 @@ Verificado en el repo tras T-003: hay snapshots consecutivos por pestaña con `s
 
 ## Acceptance criteria
 
-- [ ] Los tests sintéticos del punto 6 pasan, y el de mutación falla cuando se quita la normalización (evidencia: salida de pytest en el QA).
+- [x] Los tests sintéticos del punto 6 pasan, y el de mutación falla cuando se quita la normalización (evidencia: salida de pytest en el QA).
 - [ ] En la planilla de prueba propia de Ariel (nunca una de Finanzas) con un esquema de prueba: insertar una fila arriba del bloque y esperar la vuelta del worker deja exactamente un `cell_change` `row_inserted` para esa pestaña y ningún `value`; cambiar el color de una celda deja un `color` con `old_color` y `new_color` en hexadecimal; borrar el contenido deja un `emptied`.
 - [ ] Pintar una celda de la grilla de prueba con un color fuera de la lista de R29 crea un `issue` `color_desconocido` con `stable_key` = pestaña + color; pintar diez celdas más del mismo color no crea otro y actualiza `last_seen_at`.
-- [ ] Insertar `issue_resolution` con `ignorado` hace que `v_issue` muestre estado `ignorado`; una nueva lectura con el color presente no cambia ese estado; para una resolución `resuelto` seguida de una nueva detección, `v_issue` muestra `reabierto`.
+- [x] Insertar `issue_resolution` con `ignorado` hace que `v_issue` muestre estado `ignorado`; una nueva lectura con el color presente no cambia ese estado; para una resolución `resuelto` seguida de una nueva detección, `v_issue` muestra `reabierto`.
 - [ ] Renombrar una pestaña de la planilla de prueba deja `tab_renamed`, conserva el `source_tab` (mismo id, nombre nuevo) y los snapshots previos; agregar una pestaña deja `tab_added` + `pestana_sin_clasificar`.
-- [ ] `sources.yaml` tiene esquema para las seis pestañas acordadas y `sources load` lo deja en `source_tab.schema`; `git diff` del YAML no contiene nombres de clientes (revisión manual en el PR).
-- [ ] Sobre una pestaña sin esquema, un cambio de valor produce `value` con `cell_ref` y `row_key` nulo.
+- [x] `sources.yaml` tiene esquema para las seis pestañas acordadas y `sources load` lo deja en `source_tab.schema`; `git diff` del YAML no contiene nombres de clientes (revisión manual en el PR).
+- [x] Sobre una pestaña sin esquema, un cambio de valor produce `value` con `cell_ref` y `row_key` nulo.
 - [ ] Tras el merge y un día de worker sobre las planillas reales, `craftech-os diff` no es necesario: los cambios aparecen solos y `system_event` `tab_diffed` existe por cada snapshot nuevo (verificación posterior al merge, anotada en `## Post-merge`).
-- [ ] Ningún test, fixture, log o `system_event` contiene datos reales; `cell_change` sí guarda valores (es su función) y solo se lee desde la base.
-- [ ] `uv run pytest` y `ruff check` en limpio.
+- [x] Ningún test, fixture, log o `system_event` contiene datos reales; `cell_change` sí guarda valores (es su función) y solo se lee desde la base.
+- [x] `uv run pytest` y `ruff check` en limpio.
 
 ## Out of scope
 
@@ -70,3 +70,28 @@ Verificado en el repo tras T-003: hay snapshots consecutivos por pestaña con `s
 - Interpretar colores como estado de factura, cobros, bajas (etapa B, reglas R29, R30, R31).
 - Esquemas para pestañas distintas de las seis acordadas: se agregan después en `sources.yaml` sin tocar código; cada esquema nuevo es un commit, no un ticket.
 - Importar revisiones viejas y calcular diferencias hacia atrás (decisión 3 de Ariel).
+
+## Implementation
+
+- `app/migrations/0004_cell_change_issue.sql`: `cell_change` (solo inserción; atribución nula hasta T-005), `issue` (único por tipo + clave estable), `issue_resolution` y la vista `v_issue` (abierto, resuelto, ignorado, reabierto). `COMMENT ON` en español. En `row_*`, `old_value`/`new_value` guardan el número de fila anterior/nuevo.
+- `app/craftech_os/diff/compare.py`: algoritmo puro. Bloques por los textos de la columna clave, alineación por clave normalizada con ordinal para repetidas, ambigüedad → por posición + `alineacion_ambigua`, `column_insert` por encabezado nuevo, sin esquema o sin encabezado → por posición. Compara por texto formateado (ruido de punto flotante no cuenta).
+- `app/craftech_os/issues/detect.py`: `color_desconocido` (por pestaña y color, con cantidad y cinco celdas de muestra) y `valor_ilegible` (texto en la grilla de meses), solo en pestañas con `grid`; `upsert` actualiza `last_seen_at`.
+- `app/craftech_os/diff/store.py`: guarda cambios y problemas en la transacción del snapshot nuevo, evento `tab_diffed` con conteos por tipo y `schema_mismatch` si el encabezado no aparece.
+- `importer.py`: `tab_added`, `tab_deleted`, `tab_renamed` en `cell_change`; `pestana_sin_clasificar` reemplaza el evento `tab_unclassified` de T-002.
+- `sources.py` + `config/sources.yaml`: `schemas:` validado (pestaña listada, no `all_tabs`, `key` columna, `grid` rango, `blocks` textos) y cargado en `source_tab.schema`. Siete esquemas: el ticket dice "seis pestañas" pero nombra siete (tres por cada planilla de facturación más "FUNDINGS").
+- CLI `craftech-os diff --tab <planilla> <pestaña> [--from --to]`: solo conteos, no escribe.
+- README: sección "Cambios y problemas".
+
+## Test plan
+
+- `uv run pytest -q` → 140 passed; `ruff check` y `ruff format --check` limpios.
+- `app/tests/test_diff_compare.py` (22, puros) cubre el punto 6 del alcance; `app/tests/test_diff_store.py` (integración, sintéticos) cubre fila insertada guardada, color/valor/vaciado, color desconocido en 51 celdas → un problema y `last_seen_at` que avanza, `814,8` → `valor_ilegible`, tercera clave repetida → `alineacion_ambigua`, `v_issue` ignorado/reabierto, renombre solo en Google → `tab_renamed` (mismo id), pestaña nueva/borrada, pestaña sin esquema por posición, CLI `diff`, ningún valor en eventos, problemas ni salida.
+- Mutación: con `normalize` devolviendo el texto sin cambios fallan 10 tests, entre ellos `test_a_moved_row_respelled_still_aligns_by_normalized_key` (sale `row_deleted` + `row_inserted` en vez de `row_moved` + `value`); restaurado, 22 passed.
+- Humo de solo lectura sobre las fotos reales locales (solo conteos): los siete encabezados y sus bloques se encuentran, ninguna pestaña cae a posición, comparar una foto consigo misma da 0 cambios; FUNDINGS (única con dos fotos) da 2 `value` y 0 ambiguas.
+- Pendiente de Ariel: los criterios en vivo sobre su planilla de prueba (fila insertada, color, vaciado, color fuera de lista, renombre y alta de pestaña) con un esquema de prueba en `sources.yaml`.
+
+## Post-merge
+
+- `craftech-os migrate` y `craftech-os sources load` (carga los esquemas), reconstruir la imagen y reiniciar el worker.
+- Tras un día de worker: `SELECT count(*) FROM system_event WHERE kind = 'tab_diffed'` igual a la cantidad de snapshots nuevos del día; revisar cambios por pestaña por día (más de 200 se revisa a mano) y los primeros `color_desconocido` (se esperan `#d0e0e3`, `#ea9999` y otros).
+
