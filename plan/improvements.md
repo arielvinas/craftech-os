@@ -27,3 +27,4 @@
 - [ ] [validation] clients load-zoho aborta con error interno ante un plazo 'Net 99999999999' sin indicar la fila; debería rechazar la fila con mensaje claro — QA T-009 r1 (F1)
 - [ ] [idempotency] clients load-zoho: filas del mismo export que chocan (razón social igual salvo mayúsculas, o tax ID compartido) se pisan en cada corrida y una reemplaza a la otra sin aviso — QA T-009 r1 (F2)
 - [ ] [producto] definir el dominio de 'fuente' en client_alias (sugerido: planilla + pestaña) y normalizarlo; hoy 'Pagos' y 'pagos' son aliases distintos — decidir antes de T-010 — QA T-009 r1 (F3)
+- [ ] [test-coverage] falta test de la carga de aliases resolviendo el cliente por razón social (no por nombre) — QA T-009 r1 (F4)
