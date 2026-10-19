@@ -19,3 +19,4 @@
 - [ ] [ux] La pantalla Cambios de la web muestra el actor_id crudo cuando no hay nombre; debería usar la etiqueta de v_editor ("editor sin identificar #N" / "usuario eliminado") — T-005
 - [ ] [attribution] Una edición real tuvo hora de Drive 10 min después de la modificación (el doble del margen de 5 min): dos editores con <10 min de diferencia podrían dar cierta a la persona equivocada; medir desfase post-merge y preguntar a Ariel si ensanchar — QA T-005 r1 (F1)
 - [ ] [docs] drive_activity parse usa solo el primer actor de cada actividad (ninguna real tiene más de uno); dejarlo en comentario o test — QA T-005 r1 (F2)
+- [ ] [test-coverage] Servidor MCP: sin test para el modo de solo lectura del usuario lector (sin él, SELECT lo_create(0) pasa el filtro de consultar_sql y escribe) ni para la regla de que solo el usuario escritor del MCP registra eventos mcp_write — QA T-007 r1 (F2)
