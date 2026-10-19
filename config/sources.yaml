@@ -8,6 +8,7 @@
 
 sources:
   - title: "Facturación - Craftech Total"
+    drive_id: "19nWa8BtfYWAiJVb9njvBD9_c0Y8EbgZbS_aKR-4-cZM"
     tabs:
       CARGA:
         - "Pagos"
@@ -63,6 +64,7 @@ sources:
         - "Gastos"
 
   - title: "Facturación - SleakOps Total"
+    drive_id: "1rPqqCF6bZ7m6u4ZwqLL93N_Zp2Uc-epEmGm6P3kMGV8"
     tabs:
       CARGA:
         - "Pagos"
@@ -104,6 +106,7 @@ sources:
         - "recalc"
 
   - title: "FUNDINGS - Log de status [OFICIAL]"
+    drive_id: "1iwUB_w5mMR3139pEIPYvGOF8MHlqrxCq7rmvRGH1aAM"
     tabs:
       CARGA:
         - "FUNDINGS"
@@ -115,25 +118,34 @@ sources:
         - "2025"
 
   - title: "P&L Completo Craftech"
+    drive_id: "163llheLfMbyf_2dcAD1eGRFBVYEvvhMM4eCE6oQnll4"
     all_tabs: DERIVADA
 
   # P&L by business unit (seven spreadsheets).
   - title: "P&L - DATA"
+    drive_id: "1xA5djYwmtDTXEebvrdL-wX72qthisnDRfXt-PpL0QU0"
     all_tabs: DERIVADA
   - title: "P&L - DEVOPS"
+    drive_id: "1T9DAst0lbZqbmVimxaMsnqXohdux05R3lP3hcdJWwBc"
     all_tabs: DERIVADA
   - title: "P&L - GEN AI / DEVs"
+    drive_id: "16EDNF-_kU7-5RNYe4taFDCj1OOsdjQBk4JbQkPVqD9Q"
     all_tabs: DERIVADA
   - title: "P&L - SleakOps"
+    drive_id: "138rzq4NUmxbx24yzuBEVfQDjoYb7TNoAorYUtY7bUN8"
     all_tabs: DERIVADA
   - title: "P&L Completo Craftech - U. Negocio IT"
+    drive_id: "1o2EJ8t8hcPTpnUtA4c1G2O6XCCsnDjvY0Z5hsQwjbMU"
     all_tabs: DERIVADA
   - title: "P&L DevOps & IT Services"
+    drive_id: "1wWrElr78tD__aK4NqCEtl_gHMzePV5wNxCoNRPR59zE"
     all_tabs: DERIVADA
   - title: "P&L GEN AI - DATA"  # in the Drive trash as of 2026-10-18
+    drive_id: "19-uEAt3whmWpx_KAAjhTdJ-o4ZAwsXLgU-idHV4onhM"
     all_tabs: DERIVADA
 
   - title: "CASH FLOW MENSUAL"
+    drive_id: "1xHuASliiA2vVdPzqAanokAjouSof0vZz757fVMojBI4"
     tabs:
       CARGA:
         - "CASH FLOW USA"
@@ -154,6 +166,7 @@ sources:
         - "Gastos TC"
 
   - title: "Base informe Craftech "  # trailing space, as in Google
+    drive_id: "1rB4LnQ14cf3kNxtkQKrC9QMAP5_6naMoZPqaRrnnOBQ"
     tabs:
       CARGA:
         - "Consolidado"
@@ -203,6 +216,7 @@ sources:
         - "Sleakops - ajuste"
 
   - title: "Proyeccion sueldos"
+    drive_id: "1cwkrNg_SWDDDy_H_zsAqE05wOUFR-9XDVF42-IUvnb0"
     tabs:
       CARGA:
         - "Base sueldos"
@@ -232,6 +246,7 @@ sources:
         - "Bonos Percibidos Ene 2025 (Dic 2024)"
 
   - title: "Base sueldos - historico y actual"
+    drive_id: "1qr0cxhxR9n0qbKP8taOgQ9MjkPpeKiD6podz7ypcatM"
     tabs:
       CARGA:
         - "sueldos-percibidos"
@@ -243,6 +258,7 @@ sources:
         - "sueldos-devengados-historico"
 
   - title: "SUELDOS EEUU"
+    drive_id: "1RZF9nB6isLeupeMzpdI2t6C04PRog3On-n02lhIRnOw"
     tabs:
       CARGA:
         - "Sueldos"
@@ -260,6 +276,7 @@ sources:
         - "Hoja 40"
 
   - title: "Budget"
+    drive_id: "1q6xyHfsF3t4n4hiz2Cb0vSCQlK2ksvrY0eIVjuLwI98"
     tabs:
       CARGA:
         - "COMERCIAL"
@@ -291,6 +308,7 @@ sources:
         - "cosas rrhh"
 
   - title: "Budget por Area 2026 - Final"
+    drive_id: "1DhqSHlGbiWOpl6akIjb5TarzYB5x1_e8ipJpL2tQRIE"
     tabs:
       CARGA:
         - "Comercial"
@@ -318,6 +336,7 @@ sources:
         - "Instrucciones"
 
   - title: "Costos"
+    drive_id: "1ykyEqpNJaOSfjumShRDZpH-HlkA9lJth5b4nhny1LnM"
     tabs:
       DERIVADA:
         - "sueldos"
@@ -341,4 +360,5 @@ sources:
         - "pasivos"
 
   - title: "Costos - Escenario 1"
+    drive_id: "1VDvh7kqkEHAABSAzWpqb6kcALt3zR0T9fahS4F6oZBE"
     all_tabs: DERIVADA

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import psycopg
@@ -5,6 +6,7 @@ import yaml
 
 CLASSES = ("CARGA", "DERIVADA", "HISTORICA", "IGNORAR", "A_CONFIRMAR", "SIN_CLASIFICAR")
 SOURCES_FILE = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
+DRIVE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class SourcesError(Exception):
@@ -42,7 +44,7 @@ _UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
 
 
 def parse(text: str) -> list[dict]:
-    """Validate sources.yaml. Returns [{title, default_class, tabs: [(name, class)]}]."""
+    """Validate sources.yaml. Returns [{title, drive_id, default_class, tabs: [(name, class)]}]."""
     try:
         data = yaml.load(text, Loader=_UniqueKeyLoader)
     except yaml.YAMLError as e:
@@ -53,22 +55,30 @@ def parse(text: str) -> list[dict]:
         or not isinstance(data["sources"], list)
     ):
         raise SourcesError("sources.yaml must have a single top-level key 'sources' with a list")
-    result, titles = [], set()
+    result, titles, drive_ids = [], set(), set()
     for i, entry in enumerate(data["sources"]):
         if not isinstance(entry, dict):
             raise SourcesError(f"sources[{i}] must be a mapping")
-        unknown = set(entry) - {"title", "tabs", "all_tabs"}
+        unknown = set(entry) - {"title", "drive_id", "tabs", "all_tabs"}
         if unknown:
             raise SourcesError(f"sources[{i}]: unknown keys {sorted(unknown)}")
         title = _name(entry.get("title"), f"sources[{i}].title")
         if title in titles:
             raise SourcesError(f"duplicated source title {title!r}")
         titles.add(title)
+        drive_id = entry.get("drive_id")
+        if drive_id is not None:
+            if not isinstance(drive_id, str) or not DRIVE_ID.match(drive_id):
+                raise SourcesError(f"{title!r}: drive_id must be a Google Drive file id")
+            if drive_id in drive_ids:
+                raise SourcesError(f"{title!r}: duplicated drive_id {drive_id!r}")
+            drive_ids.add(drive_id)
         if ("tabs" in entry) == ("all_tabs" in entry):
             raise SourcesError(f"{title!r}: exactly one of 'tabs' or 'all_tabs' is required")
         if "all_tabs" in entry:
+            default_class = _class(entry["all_tabs"], title)
             result.append(
-                {"title": title, "default_class": _class(entry["all_tabs"], title), "tabs": []}
+                {"title": title, "drive_id": drive_id, "default_class": default_class, "tabs": []}
             )
             continue
         groups = entry["tabs"]
@@ -85,25 +95,30 @@ def parse(text: str) -> list[dict]:
                     raise SourcesError(f"{title!r}: duplicated tab {name!r}")
                 seen.add(name)
                 tabs.append((name, cls))
-        result.append({"title": title, "default_class": None, "tabs": tabs})
+        result.append({"title": title, "drive_id": drive_id, "default_class": None, "tabs": tabs})
     return result
 
 
 def load(conn: psycopg.Connection, sources: list[dict]) -> None:
     """Upsert sources and tabs; tabs no longer listed become inactive, never deleted.
 
+    SIN_CLASIFICAR tabs come from Google, not from the list, and stay as they are.
+
     A source missing from the list keeps its row but all its tabs become inactive.
     An all_tabs source gives its class to every tab it has.
     """
     with conn.transaction():
+        # The list owns every drive_id: clearing them first lets a renamed source keep its id.
+        conn.execute("UPDATE source SET drive_id = NULL WHERE drive_id IS NOT NULL")
         for s in sources:
             (source_id,) = conn.execute(
                 """
-                INSERT INTO source (title, default_class) VALUES (%s, %s)
-                ON CONFLICT (title) DO UPDATE SET default_class = EXCLUDED.default_class
+                INSERT INTO source (title, drive_id, default_class) VALUES (%s, %s, %s)
+                ON CONFLICT (title) DO UPDATE
+                SET drive_id = EXCLUDED.drive_id, default_class = EXCLUDED.default_class
                 RETURNING id
                 """,
-                (s["title"], s["default_class"]),
+                (s["title"], s["drive_id"], s["default_class"]),
             ).fetchone()
             for name, cls in s["tabs"]:
                 conn.execute(
@@ -116,8 +131,8 @@ def load(conn: psycopg.Connection, sources: list[dict]) -> None:
                 )
             if s["default_class"] is None:
                 conn.execute(
-                    "UPDATE source_tab SET active = false"
-                    " WHERE source_id = %s AND active AND NOT (name = ANY(%s))",
+                    "UPDATE source_tab SET active = false WHERE source_id = %s AND active"
+                    " AND class <> 'SIN_CLASIFICAR' AND NOT (name = ANY(%s))",
                     (source_id, [name for name, _ in s["tabs"]]),
                 )
             else:
@@ -150,3 +165,29 @@ def summary(conn: psycopg.Connection) -> list[tuple[str, str | None, dict[str, i
         if cls is not None:
             counts[cls] = count
     return [(title, dc, counts) for title, (dc, counts) in result.items()]
+
+
+TITLE_LINE = re.compile(r"^(\s*)- (title: .*)$")
+
+
+def with_drive_ids(text: str, drive_ids: dict[str, str]) -> str:
+    """Return sources.yaml with a drive_id line under each given title, comments kept."""
+    lines = text.splitlines(keepends=True)
+    out = []
+    for line in lines:
+        out.append(line)
+        match = TITLE_LINE.match(line.rstrip("\n"))
+        if not match:
+            continue
+        title = yaml.safe_load(match.group(2))["title"]
+        if title in drive_ids:
+            drive_id = drive_ids[title]
+            if not DRIVE_ID.match(drive_id):
+                raise SourcesError(f"{title!r}: Google returned an invalid file id")
+            out.append(f'{match.group(1)}  drive_id: "{drive_id}"\n')
+    result = "".join(out)
+    written = {s["title"]: s["drive_id"] for s in parse(result)}
+    missing = sorted(t for t, i in drive_ids.items() if written.get(t) != i)
+    if missing:
+        raise SourcesError(f"could not write drive_id for {missing}")
+    return result

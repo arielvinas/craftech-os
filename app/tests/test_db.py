@@ -7,11 +7,12 @@ import pytest
 from craftech_os import cli, sources
 from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 
-TABLES = ["schema_migration", "source", "source_tab", "system_event"]
+TABLES = ["schema_migration", "snapshot", "source", "source_tab", "system_event"]
+MIGRATIONS = ["0001_sources.sql", "0002_snapshot.sql"]
 
 
 def test_migrate_creates_tables_and_is_idempotent(db):
-    assert migrate(db) == ["0001_sources.sql"]
+    assert migrate(db) == MIGRATIONS
     assert migrate(db) == []
     rows = db.execute(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
@@ -118,6 +119,14 @@ def test_all_tabs_source_keeps_tabs_registered_on_read(db):
     assert _tabs(db) == [("P", "read later", "DERIVADA", True)]
 
 
+def test_renamed_source_keeps_its_drive_id(db):
+    migrate(db)
+    sources.load(db, sources.parse("sources: [{title: A, drive_id: x, all_tabs: CARGA}]"))
+    sources.load(db, sources.parse("sources: [{title: B, drive_id: x, all_tabs: CARGA}]"))
+    rows = db.execute("SELECT title, drive_id FROM source ORDER BY title").fetchall()
+    assert rows == [("A", None), ("B", "x")]
+
+
 def test_cli_end_to_end(db, monkeypatch, capsys):
     monkeypatch.setenv("DATABASE_URL", db.info.dsn + " password=" + (db.info.password or ""))
     assert cli.main(["migrate"]) == 0
@@ -161,7 +170,7 @@ def test_concurrent_migrate_on_empty_database_both_succeed(db):
     for t in threads:
         t.join()
     assert errors == []
-    assert sorted(results) == [[], ["0001_sources.sql"]]
+    assert sorted(results) == [[], MIGRATIONS]
 
 
 def test_cli_reports_unreadable_or_malformed_input_with_exit_code_1(monkeypatch, capsys, tmp_path):

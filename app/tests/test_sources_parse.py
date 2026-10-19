@@ -23,6 +23,7 @@ def test_names_keep_their_spaces():
     assert parsed == [
         {
             "title": "Base informe Craftech ",
+            "drive_id": None,
             "default_class": None,
             "tabs": [(" Pagos USA Sleakops(2023)", "HISTORICA")],
         }
@@ -31,7 +32,9 @@ def test_names_keep_their_spaces():
 
 def test_all_tabs_entry():
     parsed = parse("sources:\n  - {title: P&L - DATA, all_tabs: DERIVADA}\n")
-    assert parsed == [{"title": "P&L - DATA", "default_class": "DERIVADA", "tabs": []}]
+    assert parsed == [
+        {"title": "P&L - DATA", "drive_id": None, "default_class": "DERIVADA", "tabs": []}
+    ]
 
 
 @pytest.mark.parametrize(
@@ -54,8 +57,34 @@ def test_all_tabs_entry():
         ("sources: [{title: A, all_tabs: CARGA}, {title: A, all_tabs: CARGA}]", "duplicated"),
         ("sources: [{title: A, tabs: {CARGA: [x], CARGA: [y]}}]", "duplicated key 'CARGA'"),
         ("sources: [{title: A, title: B, all_tabs: CARGA}]", "duplicated key 'title'"),
+        ("sources: [{title: A, drive_id: 'a/b', all_tabs: CARGA}]", "Google Drive file id"),
+        ("sources: [{title: A, drive_id: 12, all_tabs: CARGA}]", "Google Drive file id"),
+        (
+            "sources: [{title: A, drive_id: x, all_tabs: CARGA},"
+            " {title: B, drive_id: x, all_tabs: CARGA}]",
+            "duplicated drive_id",
+        ),
     ],
 )
 def test_invalid_files_are_rejected(text, message):
     with pytest.raises(SourcesError, match=message):
         parse(text)
+
+
+def test_with_drive_ids_adds_only_the_id_lines():
+    text = (
+        "# comment\nsources:\n"
+        '  - title: "Base informe Craftech "\n    tabs: {HISTORICA: [x]}\n'
+        "  - title: Other\n    all_tabs: DERIVADA\n"
+    )
+    written = sources.with_drive_ids(text, {"Base informe Craftech ": "1aB_-z"})
+    assert written.replace('    drive_id: "1aB_-z"\n', "") == text
+    assert [s["drive_id"] for s in parse(written)] == ["1aB_-z", None]
+
+
+def test_with_drive_ids_rejects_an_invalid_id_or_an_unknown_title():
+    text = "sources:\n  - title: A\n    all_tabs: DERIVADA\n"
+    with pytest.raises(SourcesError, match="invalid file id"):
+        sources.with_drive_ids(text, {"A": 'x"\n  evil: 1'})
+    with pytest.raises(SourcesError, match="could not write drive_id for \\['B'\\]"):
+        sources.with_drive_ids(text, {"B": "x"})
