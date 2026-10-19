@@ -102,10 +102,11 @@ def read_tab(
     on_retry = _retry_logger(conn, source_id, tab_id)
     try:
         version = google.version(file_id, on_retry)
+        drive_version, drive_modified_at = int(version["version"]), version["modifiedTime"]
         grid = google.grid(file_id, title, on_retry)
         doc = document.build(grid)
         serialized = document.canonical(doc)
-    except (*READ_ERRORS, ValueError, TypeError) as e:
+    except (*READ_ERRORS, KeyError, ValueError, TypeError) as e:
         events.record(conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **_error(e))
         return None
     duration_ms = round((time.monotonic() - started) * 1000)
@@ -127,8 +128,8 @@ def read_tab(
                 """,
                 (
                     tab_id,
-                    int(version["version"]),
-                    version["modifiedTime"],
+                    drive_version,
+                    drive_modified_at,
                     duration_ms,
                     content_hash,
                     serialized,

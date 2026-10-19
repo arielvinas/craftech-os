@@ -109,7 +109,9 @@ class FakeGoogle:
             return _Request(
                 self,
                 ("version", fileId, None),
-                lambda: {"version": f["version"], "modifiedTime": "2026-10-18T12:00:00.000Z"},
+                lambda: f.get(
+                    "drive", {"version": f["version"], "modifiedTime": "2026-10-18T12:00:00.000Z"}
+                ),
             )
         tabs = self.files_by_id[spreadsheetId]["tabs"]
         if not kwargs["includeGridData"]:
@@ -264,6 +266,14 @@ def test_a_transport_error_fails_only_that_tab(db, env, fake):
     assert _import(env) == 1
     assert fake.waits == []
     assert [e for _, _, e in _events(db, "tab_failed")] == [{"error": "DecodeLimitError"}]
+    assert _snapshots(db) == 2
+
+
+@pytest.mark.parametrize("drive", [{"version": "7"}, {"modifiedTime": "2026-10-18T12:00:00Z"}])
+def test_a_drive_answer_without_version_fails_only_that_tab(db, env, fake, drive):
+    fake.files_by_id["file-p"]["drive"] = drive
+    assert _import(env) == 1
+    assert [e for _, _, e in _events(db, "tab_failed")] == [{"error": "KeyError"}]
     assert _snapshots(db) == 2
 
 
