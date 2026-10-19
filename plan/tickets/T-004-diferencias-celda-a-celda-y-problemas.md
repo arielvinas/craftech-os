@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: Diferencias celda a celda entre versiones, alineación de filas por clave y problemas con clave estable
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: [T-003]
