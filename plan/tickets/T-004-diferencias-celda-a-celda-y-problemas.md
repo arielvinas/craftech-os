@@ -1,13 +1,13 @@
 ---
 id: T-004
 title: Diferencias celda a celda entre versiones, alineación de filas por clave y problemas con clave estable
-status: todo
+status: in-progress
 priority: high
 lane: core
 depends_on: [T-003]
 effort: L
 milestone: A
-branch:
+branch: arielvinas/t-004
 ---
 
 ## Context
