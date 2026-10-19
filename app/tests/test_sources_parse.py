@@ -26,6 +26,7 @@ def test_names_keep_their_spaces():
             "drive_id": None,
             "default_class": None,
             "tabs": [(" Pagos USA Sleakops(2023)", "HISTORICA")],
+            "schemas": {},
         }
     ]
 
@@ -33,7 +34,13 @@ def test_names_keep_their_spaces():
 def test_all_tabs_entry():
     parsed = parse("sources:\n  - {title: P&L - DATA, all_tabs: DERIVADA}\n")
     assert parsed == [
-        {"title": "P&L - DATA", "drive_id": None, "default_class": "DERIVADA", "tabs": []}
+        {
+            "title": "P&L - DATA",
+            "drive_id": None,
+            "default_class": "DERIVADA",
+            "tabs": [],
+            "schemas": {},
+        }
     ]
 
 

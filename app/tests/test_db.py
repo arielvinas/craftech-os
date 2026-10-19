@@ -7,15 +7,31 @@ import pytest
 from craftech_os import cli, sources
 from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 
-TABLES = ["read_request", "schema_migration", "snapshot", "source", "source_tab", "system_event"]
-MIGRATIONS = ["0001_sources.sql", "0002_snapshot.sql", "0003_read_request.sql"]
+TABLES = [
+    "cell_change",
+    "issue",
+    "issue_resolution",
+    "read_request",
+    "schema_migration",
+    "snapshot",
+    "source",
+    "source_tab",
+    "system_event",
+]
+MIGRATIONS = [
+    "0001_sources.sql",
+    "0002_snapshot.sql",
+    "0003_read_request.sql",
+    "0004_cell_change_issue.sql",
+]
 
 
 def test_migrate_creates_tables_and_is_idempotent(db):
     assert migrate(db) == MIGRATIONS
     assert migrate(db) == []
     rows = db.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        "SELECT table_name FROM information_schema.tables"
+        " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
     ).fetchall()
     assert sorted(r[0] for r in rows) == TABLES
 
@@ -79,6 +95,19 @@ def test_load_real_config_twice_without_duplicates(db):
     assert ("Facturación - Craftech Total", "Gastos", "A_CONFIRMAR", True) in tabs
     pnl = db.execute("SELECT default_class FROM source WHERE title = 'P&L - DATA'").fetchone()
     assert pnl == ("DERIVADA",)
+    with_schema = db.execute(
+        "SELECT s.title, t.name, t.class FROM source_tab t JOIN source s ON s.id = t.source_id"
+        " WHERE t.schema IS NOT NULL ORDER BY s.title, t.name"
+    ).fetchall()
+    assert [(title[:13], name, cls) for title, name, cls in with_schema] == [
+        ("Facturación -", "Pagos", "CARGA"),
+        ("Facturación -", "Pagos ARG", "CARGA"),
+        ("Facturación -", "VENTAS", "CARGA"),
+        ("Facturación -", "Pagos", "CARGA"),
+        ("Facturación -", "Pagos ARG", "CARGA"),
+        ("Facturación -", "VENTAS", "CARGA"),
+        ("FUNDINGS - Lo", "FUNDINGS", "CARGA"),
+    ]
 
 
 def test_removed_tab_becomes_inactive_and_comes_back(db):

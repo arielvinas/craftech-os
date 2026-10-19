@@ -5,6 +5,9 @@
 # Classes: CARGA, DERIVADA, HISTORICA, IGNORAR, A_CONFIRMAR, SIN_CLASIFICAR.
 # A_CONFIRMAR: imported once, not read again until Finanzas says what it is.
 # all_tabs: every tab gets that class; tabs are registered when first read (T-002).
+# schemas (T-004): per CARGA tab, the header row text, the key column, the texts in
+# the key column that open each block, and the month grid columns. Rows are matched
+# by key inside each block; tabs without a schema are compared cell by cell by position.
 
 sources:
   - title: "Facturación - Craftech Total"
@@ -62,6 +65,22 @@ sources:
         - "Hubspot Corrección NO USAR VENTAS USA 2025"
       A_CONFIRMAR:
         - "Gastos"
+    schemas:
+      "Pagos":
+        header: "Cliente"
+        key: A
+        blocks: ["General", "Funding de AWS confirmados", "Total Ingresos"]
+        grid: "D:AM"
+      "Pagos ARG":
+        header: "Mes"
+        key: A
+        blocks: ["Total Ingresos", "Mes"]
+        grid: "B:AK"
+      "VENTAS":
+        header: "Cliente"
+        key: A
+        blocks: ["Total Ingresos"]
+        grid: "E:AN"
 
   - title: "Facturación - SleakOps Total"
     drive_id: "1rPqqCF6bZ7m6u4ZwqLL93N_Zp2Uc-epEmGm6P3kMGV8"
@@ -104,6 +123,22 @@ sources:
         - "Ventas 2025 - AWS"
       IGNORAR:
         - "recalc"
+    schemas:
+      "Pagos":
+        header: "Cliente"
+        key: A
+        blocks: ["Fundings de AWS", "General", "Total Ingresos"]
+        grid: "D:AM"
+      "Pagos ARG":
+        header: "Mes"
+        key: A
+        blocks: ["Total Ingresos", "Mes"]
+        grid: "B:AK"
+      "VENTAS":
+        header: "Mes"
+        key: A
+        blocks: ["General", "Total Ingresos"]
+        grid: "D:AM"
 
   - title: "FUNDINGS - Log de status [OFICIAL]"
     drive_id: "1iwUB_w5mMR3139pEIPYvGOF8MHlqrxCq7rmvRGH1aAM"
@@ -116,6 +151,10 @@ sources:
         - "SUMA"
       HISTORICA:
         - "2025"
+    schemas:
+      "FUNDINGS":
+        header: "EMPRESA"
+        key: A
 
   - title: "P&L Completo Craftech"
     drive_id: "163llheLfMbyf_2dcAD1eGRFBVYEvvhMM4eCE6oQnll4"

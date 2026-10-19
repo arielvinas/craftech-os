@@ -1,8 +1,11 @@
+import json
 import re
 from pathlib import Path
 
 import psycopg
 import yaml
+
+from craftech_os.diff.compare import column_index
 
 CLASSES = ("CARGA", "DERIVADA", "HISTORICA", "IGNORAR", "A_CONFIRMAR", "SIN_CLASIFICAR")
 SOURCES_FILE = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
@@ -25,6 +28,30 @@ def _class(value, what: str) -> str:
     return value
 
 
+def _schema(value, what: str) -> dict:
+    """A tab schema: header text, key column, block openers and the month grid columns."""
+    if not isinstance(value, dict) or not {"header", "key"} <= set(value):
+        raise SourcesError(f"{what}: a schema needs 'header' and 'key'")
+    unknown = set(value) - {"header", "key", "blocks", "grid"}
+    if unknown:
+        raise SourcesError(f"{what}: unknown schema keys {sorted(unknown)}")
+    _name(value["header"], f"{what} header")
+    try:
+        column_index(value["key"] if isinstance(value["key"], str) else "")
+        if "grid" in value:
+            first, sep, last = str(value["grid"]).partition(":")
+            if not sep or column_index(first) > column_index(last):
+                raise ValueError
+    except ValueError:
+        raise SourcesError(f"{what}: key must be a column (A) and grid a range (D:AM)") from None
+    blocks = value.get("blocks", [])
+    if not isinstance(blocks, list):
+        raise SourcesError(f"{what}: blocks must be a list of texts")
+    for block in blocks:
+        _name(block, f"{what} block")
+    return value
+
+
 class _UniqueKeyLoader(yaml.SafeLoader):
     """SafeLoader that rejects duplicate mapping keys instead of keeping the last one."""
 
@@ -44,7 +71,10 @@ _UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
 
 
 def parse(text: str) -> list[dict]:
-    """Validate sources.yaml. Returns [{title, drive_id, default_class, tabs: [(name, class)]}]."""
+    """Validate sources.yaml.
+
+    Returns [{title, drive_id, default_class, tabs: [(name, class)], schemas: {name: schema}}].
+    """
     try:
         data = yaml.load(text, Loader=_UniqueKeyLoader)
     except yaml.YAMLError as e:
@@ -59,7 +89,7 @@ def parse(text: str) -> list[dict]:
     for i, entry in enumerate(data["sources"]):
         if not isinstance(entry, dict):
             raise SourcesError(f"sources[{i}] must be a mapping")
-        unknown = set(entry) - {"title", "drive_id", "tabs", "all_tabs"}
+        unknown = set(entry) - {"title", "drive_id", "tabs", "all_tabs", "schemas"}
         if unknown:
             raise SourcesError(f"sources[{i}]: unknown keys {sorted(unknown)}")
         title = _name(entry.get("title"), f"sources[{i}].title")
@@ -76,9 +106,16 @@ def parse(text: str) -> list[dict]:
         if ("tabs" in entry) == ("all_tabs" in entry):
             raise SourcesError(f"{title!r}: exactly one of 'tabs' or 'all_tabs' is required")
         if "all_tabs" in entry:
-            default_class = _class(entry["all_tabs"], title)
+            if "schemas" in entry:
+                raise SourcesError(f"{title!r}: schemas need tabs listed by name, not all_tabs")
             result.append(
-                {"title": title, "drive_id": drive_id, "default_class": default_class, "tabs": []}
+                {
+                    "title": title,
+                    "drive_id": drive_id,
+                    "default_class": _class(entry["all_tabs"], title),
+                    "tabs": [],
+                    "schemas": {},
+                }
             )
             continue
         groups = entry["tabs"]
@@ -95,7 +132,22 @@ def parse(text: str) -> list[dict]:
                     raise SourcesError(f"{title!r}: duplicated tab {name!r}")
                 seen.add(name)
                 tabs.append((name, cls))
-        result.append({"title": title, "drive_id": drive_id, "default_class": None, "tabs": tabs})
+        schemas = entry.get("schemas", {})
+        if not isinstance(schemas, dict):
+            raise SourcesError(f"{title!r}: 'schemas' must map tab names to schemas")
+        for name, schema in schemas.items():
+            if name not in seen:
+                raise SourcesError(f"{title!r}: schema for {name!r}, a tab not listed in 'tabs'")
+            _schema(schema, f"{title!r} schema of {name!r}")
+        result.append(
+            {
+                "title": title,
+                "drive_id": drive_id,
+                "default_class": None,
+                "tabs": tabs,
+                "schemas": schemas,
+            }
+        )
     return result
 
 
@@ -121,13 +173,15 @@ def load(conn: psycopg.Connection, sources: list[dict]) -> None:
                 (s["title"], s["drive_id"], s["default_class"]),
             ).fetchone()
             for name, cls in s["tabs"]:
+                schema = s["schemas"].get(name)
                 conn.execute(
                     """
-                    INSERT INTO source_tab (source_id, name, class) VALUES (%s, %s, %s)
+                    INSERT INTO source_tab (source_id, name, class, schema)
+                    VALUES (%s, %s, %s, %s::jsonb)
                     ON CONFLICT (source_id, name)
-                    DO UPDATE SET class = EXCLUDED.class, active = true
+                    DO UPDATE SET class = EXCLUDED.class, schema = EXCLUDED.schema, active = true
                     """,
-                    (source_id, name, cls),
+                    (source_id, name, cls, json.dumps(schema) if schema else None),
                 )
             if s["default_class"] is None:
                 conn.execute(

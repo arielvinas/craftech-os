@@ -1,13 +1,13 @@
 ---
 id: T-004
 title: Diferencias celda a celda entre versiones, alineación de filas por clave y problemas con clave estable
-status: todo
+status: pr
 priority: high
 lane: core
 depends_on: [T-003]
 effort: L
 milestone: A
-branch:
+branch: arielvinas/t-004
 ---
 
 ## Context
@@ -52,16 +52,16 @@ Verificado en el repo tras T-003: hay snapshots consecutivos por pestaña con `s
 
 ## Acceptance criteria
 
-- [ ] Los tests sintéticos del punto 6 pasan, y el de mutación falla cuando se quita la normalización (evidencia: salida de pytest en el QA).
+- [x] Los tests sintéticos del punto 6 pasan, y el de mutación falla cuando se quita la normalización (evidencia: salida de pytest en el QA).
 - [ ] En la planilla de prueba propia de Ariel (nunca una de Finanzas) con un esquema de prueba: insertar una fila arriba del bloque y esperar la vuelta del worker deja exactamente un `cell_change` `row_inserted` para esa pestaña y ningún `value`; cambiar el color de una celda deja un `color` con `old_color` y `new_color` en hexadecimal; borrar el contenido deja un `emptied`.
 - [ ] Pintar una celda de la grilla de prueba con un color fuera de la lista de R29 crea un `issue` `color_desconocido` con `stable_key` = pestaña + color; pintar diez celdas más del mismo color no crea otro y actualiza `last_seen_at`.
-- [ ] Insertar `issue_resolution` con `ignorado` hace que `v_issue` muestre estado `ignorado`; una nueva lectura con el color presente no cambia ese estado; para una resolución `resuelto` seguida de una nueva detección, `v_issue` muestra `reabierto`.
+- [x] Insertar `issue_resolution` con `ignorado` hace que `v_issue` muestre estado `ignorado`; una nueva lectura con el color presente no cambia ese estado; para una resolución `resuelto` seguida de una nueva detección, `v_issue` muestra `reabierto`.
 - [ ] Renombrar una pestaña de la planilla de prueba deja `tab_renamed`, conserva el `source_tab` (mismo id, nombre nuevo) y los snapshots previos; agregar una pestaña deja `tab_added` + `pestana_sin_clasificar`.
-- [ ] `sources.yaml` tiene esquema para las seis pestañas acordadas y `sources load` lo deja en `source_tab.schema`; `git diff` del YAML no contiene nombres de clientes (revisión manual en el PR).
-- [ ] Sobre una pestaña sin esquema, un cambio de valor produce `value` con `cell_ref` y `row_key` nulo.
+- [x] `sources.yaml` tiene esquema para las seis pestañas acordadas y `sources load` lo deja en `source_tab.schema`; `git diff` del YAML no contiene nombres de clientes (revisión manual en el PR).
+- [x] Sobre una pestaña sin esquema, un cambio de valor produce `value` con `cell_ref` y `row_key` nulo.
 - [ ] Tras el merge y un día de worker sobre las planillas reales, `craftech-os diff` no es necesario: los cambios aparecen solos y `system_event` `tab_diffed` existe por cada snapshot nuevo (verificación posterior al merge, anotada en `## Post-merge`).
-- [ ] Ningún test, fixture, log o `system_event` contiene datos reales; `cell_change` sí guarda valores (es su función) y solo se lee desde la base.
-- [ ] `uv run pytest` y `ruff check` en limpio.
+- [x] Ningún test, fixture, log o `system_event` contiene datos reales; `cell_change` sí guarda valores (es su función) y solo se lee desde la base.
+- [x] `uv run pytest` y `ruff check` en limpio.
 
 ## Out of scope
 
@@ -70,3 +70,39 @@ Verificado en el repo tras T-003: hay snapshots consecutivos por pestaña con `s
 - Interpretar colores como estado de factura, cobros, bajas (etapa B, reglas R29, R30, R31).
 - Esquemas para pestañas distintas de las seis acordadas: se agregan después en `sources.yaml` sin tocar código; cada esquema nuevo es un commit, no un ticket.
 - Importar revisiones viejas y calcular diferencias hacia atrás (decisión 3 de Ariel).
+
+## Implementation
+
+- `app/migrations/0004_cell_change_issue.sql`: `cell_change` (solo inserción; atribución nula hasta T-005), `issue` (único por tipo + clave estable), `issue_resolution` y la vista `v_issue` (abierto, resuelto, ignorado, reabierto). `COMMENT ON` en español. En `row_*`, `old_value`/`new_value` guardan el número de fila anterior/nuevo.
+- `app/craftech_os/diff/compare.py`: algoritmo puro. Bloques por los textos de la columna clave, alineación por clave normalizada con ordinal para repetidas, ambigüedad → por posición + `alineacion_ambigua`, `column_insert` por encabezado nuevo, sin esquema o sin encabezado → por posición. Compara por texto formateado (ruido de punto flotante no cuenta).
+- `app/craftech_os/issues/detect.py`: `color_desconocido` (por pestaña y color, con cantidad y cinco celdas de muestra) y `valor_ilegible` (texto en la grilla de meses), solo en pestañas con `grid`; `upsert` actualiza `last_seen_at`.
+- `app/craftech_os/diff/store.py`: guarda cambios y problemas en la transacción del snapshot nuevo, evento `tab_diffed` con conteos por tipo y `schema_mismatch` si el encabezado no aparece.
+- `importer.py`: `tab_added`, `tab_deleted`, `tab_renamed` en `cell_change`; `pestana_sin_clasificar` reemplaza el evento `tab_unclassified` de T-002.
+- `sources.py` + `config/sources.yaml`: `schemas:` validado (pestaña listada, no `all_tabs`, `key` columna, `grid` rango, `blocks` textos) y cargado en `source_tab.schema`. Siete esquemas: el ticket dice "seis pestañas" pero nombra siete (tres por cada planilla de facturación más "FUNDINGS").
+- CLI `craftech-os diff --tab <planilla> <pestaña> [--from --to]`: solo conteos, no escribe.
+- README: sección "Cambios y problemas".
+
+Ronda de arreglos (QA ronda 1):
+- F1: antes de comparar fórmulas, la fórmula anterior se reescribe como lo haría Google tras las filas y columnas insertadas o borradas (`_shift` + `_moved_formula` en `compare.py`). Cada referencia a una fila alineada va a su fila nueva; una fila sin par (vacía o borrada) cae justo antes de la siguiente fila que no se movió; las referencias a otra pestaña y los textos entre comillas no se tocan. Las referencias absolutas (`$C$5`) también se corren, igual que en Google. Una fórmula que se edita de verdad sigue siendo `formula`, y la que quedó apuntando al número de fila viejo también.
+- F2: test del hueco con distinta cantidad de filas con clave (dos de un lado, una del otro).
+- F3: una clave que se va y otra que aparece en lugares distintos solo son `alineacion_ambigua` si alguna de las dos filas nuevas tiene el mismo contenido (sin contar la clave y sin importar la columna) que alguna de las que se fueron. Insertar una fila arriba y borrar otra abajo en la misma lectura da `row_inserted` + `row_deleted` sin problemas.
+- F4: sin cambio de código; una fila completamente vacía no existe en el documento de la foto (T-002), así que no deja `row_inserted`. Para la prueba en vivo del criterio 2, insertar una fila con la clave escrita.
+- F5: la clave de `valor_ilegible` lleva el número de repetición cuando la clave de fila se repite (regla R26: `cliente a (2):feb`); la primera aparición conserva la clave de siempre. Los colores sobre celdas vacías quedan fuera (los descarta el documento de T-002): logueado en `plan/improvements.md`.
+
+## Test plan
+
+- `uv run pytest -q` → 140 passed; `ruff check` y `ruff format --check` limpios.
+- `app/tests/test_diff_compare.py` (22, puros) cubre el punto 6 del alcance; `app/tests/test_diff_store.py` (integración, sintéticos) cubre fila insertada guardada, color/valor/vaciado, color desconocido en 51 celdas → un problema y `last_seen_at` que avanza, `814,8` → `valor_ilegible`, tercera clave repetida → `alineacion_ambigua`, `v_issue` ignorado/reabierto, renombre solo en Google → `tab_renamed` (mismo id), pestaña nueva/borrada, pestaña sin esquema por posición, CLI `diff`, ningún valor en eventos, problemas ni salida.
+- Mutación: con `normalize` devolviendo el texto sin cambios fallan 10 tests, entre ellos `test_a_moved_row_respelled_still_aligns_by_normalized_key` (sale `row_deleted` + `row_inserted` en vez de `row_moved` + `value`); restaurado, 22 passed.
+- Humo de solo lectura sobre las fotos reales locales (solo conteos): los siete encabezados y sus bloques se encuentran, ninguna pestaña cae a posición, comparar una foto consigo misma da 0 cambios; FUNDINGS (única con dos fotos) da 2 `value` y 0 ambiguas.
+- Ronda 2: `uv run pytest -q` → 147 passed. Nuevos en `test_diff_compare.py`: fila insertada arriba de fórmulas (por fila, con `$`, rango y referencia a otra pestaña) → solo `row_inserted`; fila borrada → solo `row_deleted`; fórmula editada tras la inserción → `formula` con la fórmula vieja original; fórmula que quedó con el número viejo → `formula`; hueco 2↔1 → ambiguas; alta + baja en el mismo bloque → sin ambiguas. En `test_diff_store.py`: dos filas con la misma clave y texto en la grilla → dos `valor_ilegible`.
+- Mutación ronda 2: comparar la fórmula sin reescribir → 4 rojos; la guarda del hueco en `if False:` → 1 rojo (antes sobrevivía); ambigüedad sin mirar el contenido → 1 rojo; traducir también referencias a otra pestaña → 3 rojos; fila sin par corrida con el desplazamiento del vecino → 1 rojo; sin ordinal en `valor_ilegible` → 1 rojo.
+- Humo ronda 2 (solo lectura, solo conteos, copia en `/tmp` borrada): en el último snapshot real de las siete pestañas con esquema, insertar una fila con clave como lo haría Google (filas y referencias corridas) da exactamente un `row_inserted`; con la comparación de fórmulas anterior daba entre 91 y 1087 `formula` por pestaña.
+- Para la prueba en vivo del criterio 2: insertar una fila **con la clave escrita**; una fila totalmente vacía no deja ningún cambio (ver F4).
+- Pendiente de Ariel: los criterios en vivo sobre su planilla de prueba (fila insertada, color, vaciado, color fuera de lista, renombre y alta de pestaña) con un esquema de prueba en `sources.yaml`.
+
+## Post-merge
+
+- `craftech-os migrate` y `craftech-os sources load` (carga los esquemas), reconstruir la imagen y reiniciar el worker.
+- Tras un día de worker: `SELECT count(*) FROM system_event WHERE kind = 'tab_diffed'` igual a la cantidad de snapshots nuevos del día; revisar cambios por pestaña por día (más de 200 se revisa a mano) y los primeros `color_desconocido` (se espera `#ea9999`; `#c9daf8` y `#d0e0e3` están en celdas vacías y no se ven, ver `plan/improvements.md`).
+
