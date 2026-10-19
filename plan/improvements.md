@@ -23,3 +23,4 @@
 - [ ] [ux] consultar_sql rechaza consultas legítimas con 'delete', 'update' o ';' dentro de un texto entre comillas — QA T-007 r1 (F3)
 - [ ] [data-integrity] En una pestaña real la última lectura difiere de la planilla viva aunque la fecha de modificación en Drive es anterior a la lectura; investigar cómo decide el worker cuándo releer — QA T-008 r1 (split-out)
 - [ ] [test-coverage] Ningún test detecta quitar el nullif de valor en mcp.celdas (celdas solo con color) — QA T-008 r1 (F1)
+- [ ] [test-coverage] Sin test de desempate por id cuando dos lecturas de la misma pestaña tienen el mismo read_at en mcp.celdas — QA T-008 r1 (F2)
