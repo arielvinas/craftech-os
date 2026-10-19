@@ -30,3 +30,4 @@
 - [ ] [test-coverage] falta test de la carga de aliases resolviendo el cliente por razón social (no por nombre) — QA T-009 r1 (F4)
 - [ ] [test-coverage] falta test de celda solo pintada en una pestaña de carga sin esquema — QA T-009 r1 (F5)
 - [ ] [decision-pending] Pintar o despintar una celda vacía no genera cambio color en cell_change (solo color_desconocido la ve): una celda ausente de un documento anterior a T-009 puede estar pintada. Para registrarlo hace falta marcar el formato del documento (p. ej. color_only) y comparar solo entre documentos marcados — QA T-009 r2 (F1)
+- [ ] [docs] README.md:109 dice que una celda vacía con solo color no se guarda; ya no es cierto en las pestañas CARGA con esquema — QA T-009 r3
