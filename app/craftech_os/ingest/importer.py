@@ -149,7 +149,11 @@ def read_tab(
         version = google.version(file_id, on_retry)
         drive_version, drive_modified_at = int(version["version"]), version["modifiedTime"]
         grid = google.grid(file_id, title, on_retry)
-        doc = document.build(grid)
+        (keep_color_only,) = conn.execute(
+            "SELECT class = 'CARGA' AND schema IS NOT NULL FROM source_tab WHERE id = %s",
+            (tab_id,),
+        ).fetchone()
+        doc = document.build(grid, keep_color_only)
         serialized = document.canonical(doc)
     except (*READ_ERRORS, KeyError, ValueError, TypeError) as e:
         events.record(

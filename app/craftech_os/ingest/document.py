@@ -15,10 +15,12 @@ def _hex(color: dict | None) -> str | None:
     return "#" + "".join(f"{round(c * 255):02x}" for c in channels)
 
 
-def _cell(c: int, value: dict) -> dict | None:
-    if not any(k in value for k in ("effectiveValue", "formattedValue", "userEnteredValue")):
-        return None
+def _cell(c: int, value: dict, keep_color_only: bool) -> dict | None:
     fmt = value.get("effectiveFormat", {})
+    if not any(k in value for k in ("effectiveValue", "formattedValue", "userEnteredValue")):
+        bg = _hex(fmt.get("backgroundColor"))
+        # A painted empty cell carries meaning in the month grids (rule R29).
+        return {"c": c, "bg": bg} if keep_color_only and bg not in (None, "#ffffff") else None
     cell = {
         "c": c,
         "value": value.get("effectiveValue"),
@@ -32,8 +34,11 @@ def _cell(c: int, value: dict) -> dict | None:
     return cell
 
 
-def build(grid: dict) -> dict:
-    """Rows with their non-empty cells, merged ranges and sizes; 0-based row and column."""
+def build(grid: dict, keep_color_only: bool = False) -> dict:
+    """Rows with their non-empty cells, merged ranges and sizes; 0-based row and column.
+
+    keep_color_only also keeps empty cells painted other than white, as {c, bg}.
+    """
     props = grid.get("properties", {})
     rows = []
     for block in grid.get("data", []):
@@ -42,7 +47,7 @@ def build(grid: dict) -> dict:
             cells = [
                 cell
                 for j, value in enumerate(row.get("values", []))
-                if (cell := _cell(col0 + j, value)) is not None
+                if (cell := _cell(col0 + j, value, keep_color_only)) is not None
             ]
             if cells:
                 rows.append({"r": row0 + i, "cells": cells})

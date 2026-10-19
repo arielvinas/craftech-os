@@ -128,3 +128,28 @@ def test_one_changed_color_changes_the_hash():
 def test_non_serializable_content_is_an_error(bad):
     with pytest.raises((ValueError, TypeError)):
         document.canonical({"value": bad})
+
+
+PAINTED = {
+    "data": [
+        {
+            "rowData": [
+                {
+                    "values": [
+                        {"effectiveFormat": {"backgroundColor": {"red": 1, "green": 0.6}}},
+                        {"effectiveFormat": {"backgroundColor": {"red": 1, "green": 1, "blue": 1}}},
+                        {"effectiveFormat": {}},
+                        {},
+                    ]
+                }
+            ]
+        }
+    ]
+}
+
+
+def test_a_painted_empty_cell_is_kept_as_its_color_only_when_asked():
+    doc = document.build(PAINTED, keep_color_only=True)
+    assert doc["rows"] == [{"r": 0, "cells": [{"c": 0, "bg": "#ff9900"}]}]
+    assert doc["used"] == {"rows": 1, "cols": 1}
+    assert document.build(PAINTED)["rows"] == []

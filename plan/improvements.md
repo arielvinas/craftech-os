@@ -24,3 +24,10 @@
 - [ ] [data-integrity] En una pestaña real la última lectura difiere de la planilla viva aunque la fecha de modificación en Drive es anterior a la lectura; investigar cómo decide el worker cuándo releer — QA T-008 r1 (split-out)
 - [ ] [test-coverage] Ningún test detecta quitar el nullif de valor en mcp.celdas (celdas solo con color) — QA T-008 r1 (F1)
 - [ ] [test-coverage] Sin test de desempate por id cuando dos lecturas de la misma pestaña tienen el mismo read_at en mcp.celdas — QA T-008 r1 (F2)
+- [ ] [validation] clients load-zoho aborta con error interno ante un plazo 'Net 99999999999' sin indicar la fila; debería rechazar la fila con mensaje claro — QA T-009 r1 (F1)
+- [ ] [idempotency] clients load-zoho: filas del mismo export que chocan (razón social igual salvo mayúsculas, o tax ID compartido) se pisan en cada corrida y una reemplaza a la otra sin aviso — QA T-009 r1 (F2)
+- [ ] [producto] definir el dominio de 'fuente' en client_alias (sugerido: planilla + pestaña) y normalizarlo; hoy 'Pagos' y 'pagos' son aliases distintos — decidir antes de T-010 — QA T-009 r1 (F3)
+- [ ] [test-coverage] falta test de la carga de aliases resolviendo el cliente por razón social (no por nombre) — QA T-009 r1 (F4)
+- [ ] [test-coverage] falta test de celda solo pintada en una pestaña de carga sin esquema — QA T-009 r1 (F5)
+- [ ] [decision-pending] Pintar o despintar una celda vacía no genera cambio color en cell_change (solo color_desconocido la ve): una celda ausente de un documento anterior a T-009 puede estar pintada. Para registrarlo hace falta marcar el formato del documento (p. ej. color_only) y comparar solo entre documentos marcados — QA T-009 r2 (F1)
+- [ ] [docs] README.md:109 dice que una celda vacía con solo color no se guarda; ya no es cierto en las pestañas CARGA con esquema — QA T-009 r3

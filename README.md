@@ -106,7 +106,7 @@ Cada foto nueva de una pestaña se compara con la anterior en la misma transacci
 - **Pestañas sin esquema** (todas menos "Pagos", "Pagos ARG" y "VENTAS" de las dos de facturación y "FUNDINGS"): se comparan celda a celda por posición; insertar una fila arriba cambia todas las de abajo. Para alinear otra pestaña por clave se le agrega un esquema en el YAML y `sources load`, sin tocar código.
 - **Renombrar una pestaña:** si se renombra solo en Google, el worker la sigue por su identificador y deja `tab_renamed`. Hay que renombrarla también en `config/sources.yaml`; si no, el próximo `sources load` crea una fila nueva con el nombre viejo y la pestaña renombrada vuelve como `SIN_CLASIFICAR`.
 
-Problemas (`issue`, con su estado en la vista `v_issue`): `color_desconocido` (un color en la grilla de meses que no es uno de los cinco de la regla R29, uno por pestaña y color), `valor_ilegible` (texto en la grilla de meses, por pestaña, bloque, fila y columna), `alineacion_ambigua` y `pestana_sin_clasificar`. Verlo de nuevo solo actualiza `last_seen_at`. El estado sale de la última fila de `issue_resolution`: `abierto` sin resolución, `ignorado` (no se reabre), `resuelto`, y `reabierto` si se volvió a ver después de resuelto. Una celda vacía que solo tiene color no se guarda en la foto, así que su color no se detecta.
+Problemas (`issue`, con su estado en la vista `v_issue`): `color_desconocido` (un color en la grilla de meses que no es uno de los cinco de la regla R29, uno por pestaña y color), `valor_ilegible` (texto en la grilla de meses, por pestaña, bloque, fila y columna), `alineacion_ambigua` y `pestana_sin_clasificar`. Verlo de nuevo solo actualiza `last_seen_at`. El estado sale de la última fila de `issue_resolution`: `abierto` sin resolución, `ignorado` (no se reabre), `resuelto`, y `reabierto` si se volvió a ver después de resuelto. Una celda vacía que solo tiene color se guarda en la foto solo en las pestañas `CARGA` con esquema, si no es blanca, y ahí su color puede dar `color_desconocido`; en las demás pestañas no se guarda y su color no se detecta. Pintar o despintar una celda vacía no deja un cambio `color`, porque las fotos anteriores no guardaban esas celdas; cambiar el color de una celda vacía ya pintada sí.
 
 Para recalcular a mano las diferencias entre las dos últimas fotos de una pestaña (o entre dos fotos dadas), sin guardar nada; imprime solo cantidades:
 
@@ -132,6 +132,21 @@ docker compose -f infra/docker-compose.yml run --rm app craftech-os editors
 
 Para ponerle nombre, una fila en `editor_profile` (`actor_id`, `person_name`, `author`, `reason`), que se escribe desde Claude Desktop con `asociar_editor`; la última por editor manda y se ve en la vista `v_editor`. Las notas sobre una planilla, pestaña, cambio o problema van a `annotation` (`anotar`).
 
+## Clientes y aliases
+
+Los archivos con datos de clientes viven fuera del repo, en `~/repos/craftech-os-data/`. Se montan solo para la carga, de solo lectura:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app \
+  craftech-os clients load-zoho /data/Contacts.csv
+docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:/data:ro app \
+  craftech-os aliases load /data/aliases.csv
+```
+
+- `clients load-zoho` carga las razones sociales de la Inc (`client_legal_entity` con sistema `zoho`). La clave es el tax ID; sin tax ID, la razón social normalizada. "Net N" es N días, "Due on Receipt" es 0 y cualquier otro plazo (vacío, "Custom") queda en 10. Una razón social nueva va al cliente con su Display Name, que se crea si no existe.
+- `aliases load` lee un CSV con las columnas `fuente`, `texto`, `cliente`, `decidió`, `motivo` (todas obligatorias; una fila incompleta frena la carga entera). El texto se guarda normalizado. El cliente se busca por nombre de fantasía o por razón social, normalizados, y se crea con ese nombre si no existe. Solo se agregan filas: la decisión más reciente de cada fuente y texto es la vigente (`mcp.aliases`).
+- Las dos cargas se pueden repetir: una fila igual a lo ya guardado se saltea. Imprimen y registran en `system_event` (`clients_loaded`, `aliases_loaded`) solo cantidades: leídas, creadas, actualizadas, salteadas.
+
 ## Web local
 
 ```bash
@@ -151,7 +166,7 @@ Para correrla fuera de Docker: `DATABASE_URL=... uv run craftech-os web`.
 Las preguntas sobre los datos se hacen desde Claude Desktop, que arranca `craftech-os mcp` dentro del contenedor `web` y le habla por entrada y salida estándar (sin puerto). Configuración y prueba en `docs/claude-desktop.md`.
 
 - **Consultas** (usuario `mcp_reader`, que solo ve las vistas del esquema `mcp`, en transacciones de solo lectura de 10 segundos como máximo): `listar_cambios`, `ver_cambio`, `listar_problemas`, `ver_problema`, `listar_fuentes`, `listar_editores` y `consultar_sql` (un único `SELECT` o `WITH`, hasta 500 filas). Cada fila trae planilla, pestaña, celda y `leido_en`.
-- **Escrituras** (usuario `mcp_writer`, que solo puede insertar en `issue_resolution`, `annotation` y `editor_profile`): `resolver_problema`, `anotar` y `asociar_editor`, con `autor` y `motivo` obligatorios. Cada una deja un evento `mcp_write` con la herramienta y el autor. Sin `MCP_WRITER_DATABASE_URL`, el servidor arranca sin ellas.
+- **Escrituras** (usuario `mcp_writer`, que solo puede insertar en `issue_resolution`, `annotation`, `editor_profile`, `client` y `client_alias`): `resolver_problema`, `anotar` y `asociar_editor`, con `autor` y `motivo` obligatorios. Cada una deja un evento `mcp_write` con la herramienta y el autor. Sin `MCP_WRITER_DATABASE_URL`, el servidor arranca sin ellas.
 - **Recursos:** `craftech://catalogo` (cada vista y columna del esquema `mcp` con su comentario, leído de la base) y `craftech://glosario` (sección 2 de `docs/v0.9.md`).
 
 ## Tests

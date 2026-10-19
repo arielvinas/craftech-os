@@ -2,8 +2,8 @@
 
 Queries go through mcp_reader, which only sees the views of schema mcp, in read-only
 transactions of at most 10 s. Writes go through mcp_writer, which can only INSERT into
-issue_resolution, annotation and editor_profile; whether the target exists is checked
-through the reader first. A new connection per call: the tools run in threads.
+issue_resolution, annotation, editor_profile, client and client_alias; whether the target
+exists is checked through the reader first. A new connection per call: the tools run in threads.
 """
 
 import os

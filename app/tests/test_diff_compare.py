@@ -3,6 +3,7 @@
 import pytest
 
 from craftech_os.diff.compare import a1, column_index, column_letters, compare, normalize
+from craftech_os.ingest import document
 
 SCHEMA = {"header": "Cliente", "key": "A", "blocks": ["General", "Total Ingresos"], "grid": "B:D"}
 
@@ -130,6 +131,25 @@ def test_a_value_and_its_color_changing_together_are_two_changes():
     old, new = _doc(*BASE), _doc(*BASE)
     _cell_at(new, 3, 1).update(text="101", bg="#ff00ff")
     assert _types(compare(old, new, SCHEMA)) == ["color", "value"]
+
+
+def _grid_cell(text=None, bg=None):
+    cell = {"effectiveFormat": {"backgroundColor": bg}} if bg else {}
+    if text is not None:
+        cell |= {"effectiveValue": {"stringValue": text}, "formattedValue": text}
+    return cell
+
+
+@pytest.mark.parametrize("schema", [SCHEMA, None, {**SCHEMA, "header": "Ausente"}])
+def test_keeping_painted_empty_cells_changes_nothing_on_the_first_read(schema):
+    # A client row painted whole, with two empty cells: before T-009 they were not stored.
+    green = {"red": 0.85, "green": 0.92, "blue": 0.83}
+    painted = [_grid_cell(text, green) for text in ("Cliente A", None, "200", None)]
+    texts = [[_grid_cell(t) for t in row] for row in BASE[:3]]
+    grid = {"data": [{"rowData": [{"values": v} for v in [*texts, painted]]}]}
+    before, after = document.build(grid, False), document.build(grid, True)
+    assert compare(before, after, schema)["changes"] == []
+    assert compare(after, before, schema)["changes"] == []
 
 
 def test_emptying_a_cell_is_emptied():
@@ -291,6 +311,17 @@ def test_deleting_the_last_row_of_a_range_shrinks_it():
     _total(old_doc, 6, "4:B6", "4:C5")
     _total(new_doc, 5, "4:B5", "4:C5")
     assert _types(compare(old_doc, new_doc, SCHEMA)) == ["row_deleted"]
+
+
+def test_a_formula_pointing_at_a_painted_empty_row_does_not_change():
+    rows = BASE[:5] + [[None]] + BASE[5:]
+    docs = []
+    for _ in range(2):
+        doc = _doc(*rows)
+        doc["rows"].append({"r": 5, "cells": [{"c": 1, "bg": "#ff9900"}]})
+        _cell_at(doc, 6, 1)["formula"] = "=B6"
+        docs.append(doc)
+    assert compare(*docs, SCHEMA)["changes"] == []
 
 
 def test_a_column_inserted_before_formulas_does_not_change_them():
