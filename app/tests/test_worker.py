@@ -254,6 +254,7 @@ def test_dump_keeps_the_last_fourteen(db, env, tmp_path, monkeypatch, clock):
     for day in range(1, 16):
         (backups / f"craftech-os-2026-09-{day:02}.dump").write_bytes(b"old")
     (backups / "notes.txt").write_text("not a dump")
+    (backups / "craftech-os-manual.dump").write_bytes(b"kept")
     calls = []
     monkeypatch.setattr(subprocess, "run", _pg_dump(calls))
     path = worker.dump(db, "postgresql://u:secret@h/d", backups, clock.now)
@@ -262,8 +263,8 @@ def test_dump_keeps_the_last_fourteen(db, env, tmp_path, monkeypatch, clock):
     assert cmd[:2] == ["pg_dump", "--format=custom"]
     assert "secret" not in " ".join(cmd) and child_env["PGPASSWORD"] == "secret"
     names = _dumps(backups)
-    assert len(names) == 15 and "notes.txt" in names
-    assert names[0] == "craftech-os-2026-09-03.dump" and names[-2] == path.name
+    assert len(names) == 16 and {"notes.txt", "craftech-os-manual.dump"} <= set(names)
+    assert names[0] == "craftech-os-2026-09-03.dump" and names[-3] == path.name
     (event,) = _events(db, "dump")
     assert event[1] is not None and event[2] == {"file": path.name, "size_bytes": 100}
 

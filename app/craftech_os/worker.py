@@ -125,7 +125,7 @@ def tick(conn: psycopg.Connection, google: Google, now=_now, sleep=time.sleep) -
 
 
 def _dumps(directory: Path) -> list[Path]:
-    return sorted(directory.glob("craftech-os-*.dump"))
+    return sorted(directory.glob("craftech-os-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].dump"))
 
 
 def dump_due(directory: Path, now: datetime) -> bool:
