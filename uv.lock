@@ -91,6 +91,8 @@ source = { editable = "." }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth" },
+    { name = "google-auth-httplib2" },
+    { name = "httplib2" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pyyaml" },
 ]
@@ -105,6 +107,8 @@ dev = [
 requires-dist = [
     { name = "google-api-python-client", specifier = ">=2,<3" },
     { name = "google-auth", specifier = ">=2,<3" },
+    { name = "google-auth-httplib2", specifier = ">=0.4,<1" },
+    { name = "httplib2", specifier = ">=0.32,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pyyaml", specifier = ">=6,<7" },
 ]
