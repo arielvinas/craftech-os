@@ -197,6 +197,10 @@ def _columns(old_header: dict, new_header: dict, width: int):
     return mapping, inserted
 
 
+def _has_value(row: dict) -> bool:
+    return any("value" in cell for cell in row["cells"].values())
+
+
 def _content(row: dict, key_c: int) -> tuple:
     """What a row shows besides its key, ignoring columns."""
     return tuple(sorted(v for c, cell in row["cells"].items() if c != key_c and (v := value(cell))))
@@ -342,7 +346,11 @@ def _schema_changes(old_doc: dict, new_doc: dict, schema: dict):
         if value(new_header.get(c)) is not None
     ]
     ambiguous, aligned = [], []
-    old_by_name, new_by_name = dict(old_blocks), dict(new_blocks)
+    # A row of painted empty cells only is not a row: it is never inserted, deleted or paired.
+    old_by_name, new_by_name = (
+        {name: [row for row in rows if _has_value(row)] for name, rows in split}
+        for split in (old_blocks, new_blocks)
+    )
     for name in [n for n, _ in old_blocks] + [n for n, _ in new_blocks if n not in old_by_name]:
         pairs, moved, keys = _align(
             old_by_name.get(name, []), new_by_name.get(name, []), column_index(schema["key"])

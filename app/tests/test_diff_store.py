@@ -43,7 +43,9 @@ def _rgb(hex_color):
 
 
 def _value(text, bg=None):
-    """A Sheets API cell: numbers as numbers, anything else as text."""
+    """A Sheets API cell: numbers as numbers, anything else as text; None paints an empty cell."""
+    if text is None:
+        return {"effectiveFormat": {"backgroundColor": _rgb(bg)}}
     try:
         effective = {"numberValue": float(text)}
     except ValueError:
@@ -214,6 +216,27 @@ def test_an_unknown_color_is_one_problem_however_many_cells(db, env, fake):
     assert len(_issues(db, "color_desconocido")) == 1
     assert db.execute("SELECT last_seen_at > %s FROM issue", (first,)).fetchone() == (True,)
     assert _issues(db, "color_desconocido")[0][1]["cells"] == 52
+
+
+def test_a_painted_empty_cell_is_kept_only_in_a_carga_tab_with_schema(db, env, fake):
+    rows = [list(r) for r in BASE]
+    rows[4][3] = (None, SALMON)
+    rows[4].append((None, "#ffffff"))
+    _set(fake, rows)
+    fake.files_by_id["file-p"]["tabs"] = [_grid(21, "Resumen", rows)]
+    assert _import(env) == 0
+    painted = db.execute(
+        "SELECT t.name, cell FROM snapshot s JOIN source_tab t ON t.id = s.source_tab_id,"
+        " jsonb_array_elements(s.content->'rows') r, jsonb_array_elements(r->'cells') cell"
+        " WHERE NOT cell ? 'value'"
+    ).fetchall()
+    assert painted == [("Cobros", {"c": 3, "bg": SALMON})]
+    ((key, details, _),) = _issues(db, "color_desconocido")
+    assert (key, details["sample"]) == (f"{_tab_id(db)}:{SALMON}", ["D5"])
+    # Painting a whole empty row is not a row inserted.
+    _set(fake, rows + [[(None, ORANGE), (None, ORANGE)]])
+    assert _import(env) == 0
+    assert [c for c in _changes(db) if c[0] != "tab_added"] == []
 
 
 def test_text_in_the_month_grid_is_an_unreadable_value(db, env, fake):
