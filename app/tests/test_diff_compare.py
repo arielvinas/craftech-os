@@ -3,6 +3,7 @@
 import pytest
 
 from craftech_os.diff.compare import a1, column_index, column_letters, compare, normalize
+from craftech_os.ingest import document
 
 SCHEMA = {"header": "Cliente", "key": "A", "blocks": ["General", "Total Ingresos"], "grid": "B:D"}
 
@@ -132,14 +133,23 @@ def test_a_value_and_its_color_changing_together_are_two_changes():
     assert _types(compare(old, new, SCHEMA)) == ["color", "value"]
 
 
-def test_painting_or_unpainting_an_empty_cell_is_a_color_change():
-    old, new = _doc(*BASE), _doc(*BASE)
-    next(row for row in new["rows"] if row["r"] == 2)["cells"].append({"c": 1, "bg": "#ff9900"})
-    (change,) = compare(old, new, SCHEMA)["changes"]
-    assert (change["change_type"], change["cell_ref"]) == ("color", "B3")
-    assert (change["old_color"], change["new_color"]) == (None, "#ff9900")
-    (change,) = compare(new, old, SCHEMA)["changes"]
-    assert (change["old_color"], change["new_color"]) == ("#ff9900", None)
+def _grid_cell(text=None, bg=None):
+    cell = {"effectiveFormat": {"backgroundColor": bg}} if bg else {}
+    if text is not None:
+        cell |= {"effectiveValue": {"stringValue": text}, "formattedValue": text}
+    return cell
+
+
+@pytest.mark.parametrize("schema", [SCHEMA, None, {**SCHEMA, "header": "Ausente"}])
+def test_keeping_painted_empty_cells_changes_nothing_on_the_first_read(schema):
+    # A client row painted whole, with two empty cells: before T-009 they were not stored.
+    green = {"red": 0.85, "green": 0.92, "blue": 0.83}
+    painted = [_grid_cell(text, green) for text in ("Cliente A", None, "200", None)]
+    texts = [[_grid_cell(t) for t in row] for row in BASE[:3]]
+    grid = {"data": [{"rowData": [{"values": v} for v in [*texts, painted]]}]}
+    before, after = document.build(grid, False), document.build(grid, True)
+    assert compare(before, after, schema)["changes"] == []
+    assert compare(after, before, schema)["changes"] == []
 
 
 def test_emptying_a_cell_is_emptied():

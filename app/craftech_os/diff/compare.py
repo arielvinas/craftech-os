@@ -123,10 +123,11 @@ def cell_changes(
             out.append(_change("formula", cell_ref=ref, old_formula=of, new_formula=nf, **row))
         if ov != nv:
             out.append(_change("value", cell_ref=ref, old_value=ov, new_value=nv, **row))
-    old_bg, new_bg = (old or {}).get("bg"), (new or {}).get("bg")
-    # A missing cell is unpainted; a value that appears is its own change.
-    if old_bg != new_bg and (old is not None and new is not None or nv is None):
-        out.append(_change("color", cell_ref=ref, old_color=old_bg, new_color=new_bg, **row))
+    # A missing cell may be painted: documents read before T-009 did not keep empty cells.
+    if old is not None and new is not None and old.get("bg") != new.get("bg"):
+        out.append(
+            _change("color", cell_ref=ref, old_color=old.get("bg"), new_color=new.get("bg"), **row)
+        )
     return out
 
 
