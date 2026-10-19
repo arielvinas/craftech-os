@@ -1,13 +1,13 @@
 ---
 id: T-008
 title: Contenido actual de las celdas en el servidor MCP: vista de solo lectura sobre la última lectura de cada pestaña
-status: todo
+status: in-progress
 priority: high
 lane: core
 depends_on: []
 effort: S
 milestone: A
-branch:
+branch: feat/t-008-celdas-en-mcp
 ---
 
 ## Context
