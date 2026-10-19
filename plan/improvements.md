@@ -28,3 +28,4 @@
 - [ ] [idempotency] clients load-zoho: filas del mismo export que chocan (razón social igual salvo mayúsculas, o tax ID compartido) se pisan en cada corrida y una reemplaza a la otra sin aviso — QA T-009 r1 (F2)
 - [ ] [producto] definir el dominio de 'fuente' en client_alias (sugerido: planilla + pestaña) y normalizarlo; hoy 'Pagos' y 'pagos' son aliases distintos — decidir antes de T-010 — QA T-009 r1 (F3)
 - [ ] [test-coverage] falta test de la carga de aliases resolviendo el cliente por razón social (no por nombre) — QA T-009 r1 (F4)
+- [ ] [test-coverage] falta test de celda solo pintada en una pestaña de carga sin esquema — QA T-009 r1 (F5)
