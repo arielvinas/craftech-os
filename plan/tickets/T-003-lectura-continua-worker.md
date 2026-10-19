@@ -40,12 +40,12 @@ Verificado en el repo tras T-002: existe el lector de pestañas, `snapshot` y `s
 - [ ] `docker compose up -d` levanta `postgres` y `worker`; `docker compose logs worker` muestra una vuelta cada 5 minutos (±10 segundos) con planillas chequeadas y sin valores de celdas.
 - [ ] Al editar una celda en una planilla de prueba propia de Ariel configurada en un `sources.yaml` de prueba (nunca en las planillas de Finanzas), en menos de 8 minutos aparece un `system_event` `version_changed`, luego un `calm_wait`, y un `snapshot` nuevo solo de la pestaña editada; las pestañas no tocadas no suman snapshots.
 - [ ] Una pestaña `HISTORICA`, `IGNORAR` o `A_CONFIRMAR` de esa planilla de prueba, editada, no genera snapshot nuevo en la lectura continua; `craftech-os import --source` sí la relee.
-- [ ] `craftech-os read-now "<título>"` dos veces seguidas deja una sola fila pendiente en `read_request`; en la siguiente vuelta tiene `served_at` y la planilla fue leída aunque su versión no haya cambiado.
-- [ ] En test, el tope de calma de 10 minutos corta la espera y lee igual, dejando un `calm_wait` que lo indica.
-- [ ] Un 429 simulado en el chequeo de versión produce `api_retry` y la vuelta termina; el worker sigue vivo en la siguiente.
-- [ ] `craftech-os dump` deja un archivo `.dump` en `~/.config/craftech-os/backups/` restaurable con `pg_restore --list`; con 15 archivos presentes, el siguiente dump deja 14. `system_event` tiene el evento `dump` con tamaño.
-- [ ] Matar el worker a mitad de una lectura y volverlo a levantar no deja snapshots parciales ni duplicados: la pestaña se vuelve a leer y se guarda una sola vez (verificar por `content_hash`).
-- [ ] `uv run pytest` y `ruff check` en limpio; ningún test llama a Google ni necesita red.
+- [x] `craftech-os read-now "<título>"` dos veces seguidas deja una sola fila pendiente en `read_request`; en la siguiente vuelta tiene `served_at` y la planilla fue leída aunque su versión no haya cambiado.
+- [x] En test, el tope de calma de 10 minutos corta la espera y lee igual, dejando un `calm_wait` que lo indica.
+- [x] Un 429 simulado en el chequeo de versión produce `api_retry` y la vuelta termina; el worker sigue vivo en la siguiente.
+- [x] `craftech-os dump` deja un archivo `.dump` en `~/.config/craftech-os/backups/` restaurable con `pg_restore --list`; con 15 archivos presentes, el siguiente dump deja 14. `system_event` tiene el evento `dump` con tamaño.
+- [x] Matar el worker a mitad de una lectura y volverlo a levantar no deja snapshots parciales ni duplicados: la pestaña se vuelve a leer y se guarda una sola vez (verificar por `content_hash`).
+- [x] `uv run pytest` y `ruff check` en limpio; ningún test llama a Google ni necesita red.
 
 ## Out of scope
 
@@ -55,3 +55,64 @@ Verificado en el repo tras T-002: existe el lector de pestañas, `snapshot` y `s
 - Subir el dump a S3 o a otro destino (pregunta abierta 1 del ADR, la decide Ariel).
 - Alertas por Slack o correo (etapa D).
 - Correr siempre prendido: la laptop dormida pierde vueltas; aceptado por Ariel durante la v0.
+
+## Implementation
+
+- `app/migrations/0003_read_request.sql`: tabla `read_request` con un índice único parcial (`source_id` donde `served_at` es nulo). Así "una sola fila pendiente por planilla" la garantiza la base, y `read-now` inserta con `ON CONFLICT DO NOTHING`.
+- `app/craftech_os/worker.py`: tiene `tick` (una vuelta), `run` (el bucle; duerme `300 - duración`), `dump`, `dump_due` y `_wait_until_quiet`. El reloj entra como dos funciones (`now`, `sleep`), y así los tests no esperan.
+  - La versión conocida de cada planilla es el `drive_version` del último evento `source_read`, que se guarda solo si se leyeron todas las pestañas. No hay tabla nueva para esto. Al reiniciar, el worker no relee lo que ya tenía. Si una pestaña falló o el proceso murió a mitad de una lectura, la versión no queda registrada y la planilla se relee en la vuelta siguiente; el hash evita guardar duplicados.
+  - La primera vuelta sobre una base que nunca tuvo worker ve "cambio" en todas las planillas. Lee una vez sus pestañas `CARGA` y `DERIVADA` (no guarda snapshots si el hash es el mismo) y registra la versión.
+  - Calma: la planilla está quieta si pasaron 2 minutos desde su `modifiedTime`. Si no, vuelve a preguntar cada 30 segundos, y a los 10 minutos de empezar la espera corta y la lee igual (`capped: true`). Cada planilla que cambió deja un `calm_wait`, aunque haya esperado 0 segundos.
+  - Una planilla pedida con `read-now` se procesa primero, se lee sin esperar la calma y aunque su versión no haya cambiado, y queda `served_at` recién cuando se leyeron todas sus pestañas. Si Google falla, el pedido sigue pendiente y se reintenta en la vuelta siguiente.
+  - Errores: un error de Google (los mismos que contempla el importador, `READ_ERRORS`) en el chequeo de versión de una planilla se registra como `source_failed` y la vuelta sigue con las demás. Un error no previsto se propaga y el proceso sale con código distinto de 0.
+  - Dump: `pg_dump --format=custom` escribe un archivo `.partial` que después se renombra a `craftech-os-AAAA-MM-DD.dump` (fecha local), y se conservan los 14 más nuevos de ese patrón; los demás archivos de la carpeta no se tocan. Si falla, `dump_failed` guarda solo la última línea de stderr de `pg_dump`. Se usa la excepción propia `DumpFailed`, porque el mensaje de `CalledProcessError` incluye la línea de comando, con la URL y la contraseña.
+- `app/craftech_os/ingest/importer.py`: `import_source` acepta `classes`, que filtra las pestañas por clase después de registrarlas, y `drive_version`. `_retry_logger` y `_error` pasan a ser públicas (`retry_logger`, `error_details`) porque el worker las usa.
+- Evento `google_retry` → `api_retry` en todo el código, que es el nombre del ticket. Los eventos viejos de la base de desarrollo quedan con el nombre anterior.
+- `app/craftech_os/cli.py`: tres comandos nuevos.
+  - `worker`.
+  - `read-now TITLE`: si el título no existe o la planilla no tiene `drive_id`, sale con 1.
+  - `dump [--dir]`.
+- `infra/docker-compose.yml`:
+  - Servicio `worker`: con `restart: unless-stopped`, la clave montada de solo lectura y `BACKUPS_DIR` montado como `/backups`, que por defecto es `~/.config/craftech-os/backups`.
+  - `TZ` en `America/Argentina/Buenos_Aires`, en `worker` y en `app`; en la prueba de humo, sin esto el dump hecho a mano salía con la fecha UTC.
+  - `app` pasa al perfil `cli`, para que `docker compose up -d` levante solo `postgres` y `worker`; `docker compose run --rm app …` sigue igual.
+- `infra/.env.example` tiene `BACKUPS_DIR`, y el README tiene la sección "Lectura continua (worker)".
+- Prueba de humo, en un proyecto de Compose aparte (`craftech-os-t003`, con su volumen propio y sin puerto, sin tocar la base de desarrollo):
+  - `migrate`.
+  - `up -d`: levanta `postgres` y `worker`; la vuelta 1 dejó una línea en el log y el dump se hizo enseguida.
+  - `pg_restore --list` del dump: lista 18 tablas.
+  - Con 16 archivos presentes, `craftech-os dump` dejó 14.
+  - `read-now` dos veces: "read requested" y después "already pending".
+  - `read-now "Nope"`: sale con 1.
+  - Una planilla falsa con un `drive_id` inexistente quedó en `source_failed`, con el pedido pendiente.
+- Sin verificar: los criterios 2 y 3 (editar la planilla de prueba propia de Ariel). En esta máquina no hay un `sources.yaml` de prueba con esa planilla, y no leí ninguna planilla de Finanzas.
+
+## Test plan
+
+1. `docker compose up -d`: deben quedar solo `postgres` y `worker`. En `docker compose logs -f worker`, una línea `tick:` cada 5 minutos (±10 segundos), sin valores de celdas.
+2. Con un `sources.yaml` de prueba que apunte a la planilla propia de Ariel, editar una celda de una pestaña `CARGA`. En menos de 8 minutos tienen que aparecer `version_changed`, `calm_wait` (con `waited_s` de 120 o más), y un `snapshot` nuevo solo para esa pestaña.
+3. Editar una pestaña `HISTORICA`, `IGNORAR` o `A_CONFIRMAR` de la misma planilla: no aparece ningún snapshot nuevo. Después, `craftech-os import --source "<título>"` sí la relee.
+4. Editar sin parar durante más de 10 minutos: queda un `calm_wait` con `capped: true` y la planilla se lee igual.
+5. Correr `read-now "<título>"` dos veces: queda una sola fila pendiente. En la vuelta siguiente tiene `served_at` y `snapshot_count`, aunque no se haya editado nada.
+6. `read-now` con un título inexistente, o con una planilla sin `drive_id`: sale con 1 y no inserta ninguna fila.
+7. `craftech-os dump`, después `pg_restore --list` del archivo. Con 15 archivos `craftech-os-*.dump` presentes, después del dump quedan 14.
+8. `docker compose kill worker` mientras lee una planilla y después `up -d`: esa planilla se relee y no hay `content_hash` duplicados por pestaña.
+9. Una carpeta de backups sin permiso de escritura: aparece `dump_failed` y el worker sigue haciendo sus vueltas.
+
+**Blast radius:**
+- `importer.import_source`: los parámetros nuevos son opcionales, y `craftech-os import` sigue igual.
+- El evento de reintento de `import` y de `sources resolve` ahora se llama `api_retry`.
+- `docker-compose.yml`: `app` tiene perfil, y `docker compose up -d` ya no lo levanta (antes salía enseguida).
+- `test_db` ahora incluye la migración 0003.
+
+## Post-merge
+
+En `main`, con `infra/.env` cargado:
+
+1. Opcional: agregar a `infra/.env` la línea `BACKUPS_DIR=/Users/arielvinas/.config/craftech-os/backups`, con ruta absoluta. Si la variable queda vacía, se usa esa misma carpeta.
+2. `mkdir -p ~/.config/craftech-os/backups`.
+3. `docker compose -f infra/docker-compose.yml build app worker`.
+4. `docker compose -f infra/docker-compose.yml run --rm app craftech-os migrate`. Debe imprimir `applied 0003_read_request.sql`.
+5. `docker compose -f infra/docker-compose.yml up -d`. Verificar con `docker compose -f infra/docker-compose.yml logs worker`: tiene que aparecer una línea `tick:` (la primera vuelta lee una vez las pestañas `CARGA` y `DERIVADA` de las 20 planillas) y un `dumped craftech-os-AAAA-MM-DD.dump`.
+6. Verificar el dump con `ls ~/.config/craftech-os/backups`.
+7. Nota: en la base de desarrollo, los reintentos anteriores a este cambio se llaman `google_retry` en `system_event`, y los nuevos `api_retry`.
