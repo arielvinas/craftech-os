@@ -7,9 +7,9 @@ from pathlib import Path
 import psycopg
 from googleapiclient.errors import HttpError
 
-from craftech_os import events, migrate, sources, worker
+from craftech_os import attribution, events, migrate, sources, worker
 from craftech_os.diff import store
-from craftech_os.ingest import importer
+from craftech_os.ingest import drive_activity, importer
 from craftech_os.ingest.google import Google, GoogleError
 
 
@@ -96,6 +96,56 @@ def cmd_import(args) -> None:
     failed = sum(r["failed"] for r in results)
     if failed:
         raise importer.ImportFailed(f"{failed} reads failed: see system_event")
+
+
+def cmd_drive_import(args) -> None:
+    """Store the Drive activity of every source (or of one) and attribute the pending changes."""
+    google = Google.from_environment()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, title, drive_id FROM source WHERE drive_id IS NOT NULL"
+            " AND (%(title)s::text IS NULL OR title = %(title)s) ORDER BY id",
+            {"title": args.source},
+        ).fetchall()
+        if not rows:
+            raise sources.SourcesError(f"no source titled {args.source!r} with a drive_id")
+        failed = 0
+        for source_id, title, drive_id in rows:
+            fetched = drive_activity.fetch(conn, google, source_id, drive_id, worker._now)
+            if fetched is None:
+                failed += 1
+                print(f"{title!r}: failed")
+                continue
+            counts = attribution.attribute(conn, source_id, fetched["through"])
+            detail = ", ".join(f"{c} {n}" for c, n in sorted(counts.items()))
+            print(
+                f"{title!r}: {fetched['inserted']} new activities,"
+                f" {counts.total()} changes attributed" + (f": {detail}" if detail else "")
+            )
+    if failed:
+        raise importer.ImportFailed(f"{failed} activity reads failed: see system_event")
+
+
+def cmd_editors(args) -> None:
+    """Each actor of the Drive activity: edits, spreadsheets, hours and dates (UTC)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT e.label, e.actor_id, count(*) FILTER (WHERE a.action_type = 'edit'),"
+            " array_agg(DISTINCT s.title ORDER BY s.title),"
+            " min(extract(hour FROM a.activity_at AT TIME ZONE 'UTC'))::int,"
+            " max(extract(hour FROM a.activity_at AT TIME ZONE 'UTC'))::int,"
+            " min(a.activity_at AT TIME ZONE 'UTC')::date,"
+            " max(a.activity_at AT TIME ZONE 'UTC')::date"
+            " FROM v_editor e JOIN drive_activity a USING (actor_id)"
+            " JOIN source s ON s.id = a.source_id"
+            " GROUP BY e.label, e.actor_id, e.number ORDER BY e.number NULLS LAST"
+        ).fetchall()
+    for label, actor_id, edits, titles, first_h, last_h, first, last in rows:
+        print(
+            f"{label}  {actor_id}  {edits} edits  {', '.join(map(repr, titles))}"
+            f"  {first_h}-{last_h} h UTC  {first}..{last}"
+        )
+    print(f"{len(rows)} editors")
 
 
 def cmd_read_now(args) -> None:
@@ -203,6 +253,16 @@ def main(argv: list[str] | None = None) -> int:
     import_cmd.add_argument("--source", help="only the spreadsheet with this exact title")
     import_cmd.add_argument("--file", type=Path, default=sources.SOURCES_FILE)
     import_cmd.set_defaults(func=cmd_import)
+    drive_cmd = commands.add_parser("drive", help="Drive activity: who edited and when")
+    drive_sub = drive_cmd.add_subparsers(required=True)
+    drive_import_cmd = drive_sub.add_parser(
+        "import", help="store the Drive activity of every source and attribute the changes"
+    )
+    drive_import_cmd.add_argument("--source", help="only the spreadsheet with this exact title")
+    drive_import_cmd.set_defaults(func=cmd_drive_import)
+    commands.add_parser(
+        "editors", help="actors of the Drive activity, to tell who is who (read-only)"
+    ).set_defaults(func=cmd_editors)
     read_now_cmd = commands.add_parser(
         "read-now", help="ask the worker to read a spreadsheet on its next tick"
     )

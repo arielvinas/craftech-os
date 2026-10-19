@@ -1,13 +1,13 @@
 ---
 id: T-005
 title: Actividad de Drive: importación desde marzo de 2026, perfiles de editor, atribución de cada cambio y anotaciones
-status: todo
+status: pr
 priority: high
 lane: core
 depends_on: [T-004]
 effort: M
 milestone: A
-branch:
+branch: arielvinas/t-005
 ---
 
 ## Context
@@ -57,3 +57,75 @@ Verificado en el repo tras T-004: `cell_change` tiene `window_start`, `window_en
 - Autoría por celda (imposible sin script en la planilla; descartado).
 - Cambiar la fecha de un cobro o de cualquier hecho (etapa B).
 - Alertas o resumen de "quién tocó qué" por Slack (etapa D).
+
+## Decisions
+
+- 2026-10-19 — **FUNDINGS tiene 13 actores, no ~8: ¿a quiénes numerar como 'editor sin identificar #N'?** → (a) Numerar a TODOS los actores de la actividad, incluidos los que solo cambiaron permisos. Anotar en el ticket el número final medido en la importación real (el criterio de '~8' se ajusta a lo medido).
+- 2026-10-19 — **Actividades de cuentas eliminadas (deletedUser, sin identificador)** → (a) Guardarlas con un único actor_id = 'deletedUser', que cuenta como un actor más y aparece en v_editor como 'usuario eliminado'; si es el único de la ventana, sale cierta con ese identificador.
+- 2026-10-19 — **Ventana de atribución: Drive Activity agrupa ediciones en tandas ~3 min y les pone hora 1,5–2,5 min después de la modificación; la ventana (window_start, window_end] atribuye mal** → (a) Ensanchar: contar actividad en (window_start, window_end + 5 min]; atribuir solo cuando ya se leyó la actividad posterior a window_end + 5 min. Nunca da cierta a la persona equivocada.
+
+## Implementation
+
+- **Migración `0005_drive_activity.sql`:** tablas `drive_activity` (`content_hash` único, índice por planilla y momento), `editor_profile` y `annotation` (con `CHECK` sobre los cuatro `entity_type`); vistas `v_editor` y `v_attribution_stats`; `COMMENT ON` en español en todo. `cell_change` no cambia de columnas: solo se reescriben los comentarios de `window_end`, `attributed_editor_ids` y `attributed_at` para reflejar la ventana ensanchada.
+- **`ingest/google.py`:** se agrega el alcance `drive.activity.readonly`, el cliente `driveactivity` v2 (misma dependencia) y `activities(file_id, on_retry, since)`, que pagina de a 100 con los mismos reintentos y eventos `api_retry` de T-002.
+- **`ingest/drive_activity.py`:** `parse` extrae el actor (`people/...`, `deletedUser` para cualquier cuenta eliminada, o el tipo de actor sin identificador: `anonymous`, `system`), el momento y el tipo de acción, y guarda la actividad entera en `raw` con un SHA-256 de su JSON canónico. `fetch` lee todas las páginas y recién después inserta, en una sola transacción y de la más vieja a la más nueva, para que la numeración siga el orden real de aparición. Si falla a mitad de camino no guarda nada (evento `activity_failed`) y la próxima vez pide el mismo rango: así queda reanudable sin estado parcial. Una lectura completa deja `activity_read` con la cantidad insertada, hasta cuándo se leyó (`through`) y la última actividad conocida (`latest`); la siguiente pide desde `latest` menos 10 minutos.
+- **`attribution.py`:** una sola sentencia SQL atribuye los cambios pendientes de una planilla cuya ventana más cinco minutos ya quedó cubierta por la lectura (`window_end + 5 min < through`). Cuenta solo las acciones `edit` en `(window_start, window_end + 5 min]`: un actor distinto da `cierta` con `attributed_at` en su última edición, varios dan `una_de`, ninguno da `sin_datos`. Deja un evento `attributed` con las cantidades. Los cambios de pestaña no tienen ventana y quedan sin atribuir.
+- **Worker:** al final de cada vuelta, para cada planilla leída en esa vuelta, con cambios esperando atribución cuyo margen ya pasó, o sin actividad leída hace una hora, trae la actividad y atribuye. Un error de la API en una planilla no frena la vuelta. La línea impresa por vuelta no cambia.
+- **CLI:** `drive import [--source]` (imprime por planilla las actividades nuevas y los cambios atribuidos; termina con error si alguna lectura falló) y `editors` (cada actor con su etiqueta de `v_editor`, ediciones, planillas, franja horaria en UTC y primera y última fecha). Solo lectura.
+- **Web:** `editor_names` ya no pregunta si existe `editor_profile`.
+- **README:** sección "Quién hizo cada cambio".
+
+**Medido en la importación real** (19-oct-2026, contra una base descartable, `craftech_os_test`; la base real queda para después del merge porque las migraciones se verifican por hash):
+
+- 20 planillas, 63.150 actividades, en 6 min 21 s. Una segunda corrida agrega 0 y tarda 24 s.
+- "FUNDINGS - Log de status [OFICIAL]": **1.154 actividades**, del 16-mar-2026 al 19-oct-2026, con **13 actores distintos** (12 `people/...` más `deletedUser`, con 84 actividades). Según la decisión del 19-oct, se numeran todos.
+- En total hay 23 actores. Entre ellos están `anonymous` (14 `dlpChange`) y `system` (7 `permissionChange`). No tienen ediciones, así que no influyen en la atribución, pero reciben número como cualquier otro actor.
+- Como la numeración es global, los actores de FUNDINGS no son #1 a #13 consecutivos: van #1–#3 y #7–#15, más "usuario eliminado". `v_editor` dio exactamente lo mismo en dos consultas seguidas.
+- Tipos de acción: 63.065 `edit`, 25 `rename`, 20 `create`, 14 `permissionChange`, 14 `dlpChange`, 11 `move` y 1 `delete`.
+
+## Test plan
+
+- `app/tests/test_drive_activity.py`, contra PostgreSQL y con Google simulado:
+  - Importación paginada y reimportación sin duplicados.
+  - Una sola planilla con `--source`.
+  - Lectura incremental desde la última actividad menos 10 minutos.
+  - Importación interrumpida: no guarda nada y la siguiente lee todo.
+  - Reintentos por cuota.
+  - Ningún evento ni salida contiene nombres de Google.
+- Atribución:
+  - Un editor da `cierta` con la hora de su última edición.
+  - Dos editores dan `una_de` con `attributed_at` nulo; ninguno da `sin_datos`.
+  - `deletedUser` solo da `cierta`.
+  - Un cambio de permiso no cuenta.
+  - Un cambio espera hasta que se haya leído la actividad posterior a su margen.
+  - Solo mira la actividad de su planilla.
+  - `drive import` atribuye lo pendiente al final.
+- Vistas y tablas:
+  - Las columnas de `cell_change` no cambian.
+  - Numeración estable por primera aparición, incluso con un backfill posterior.
+  - La última fila de `editor_profile` manda.
+  - `annotation` acepta los cuatro tipos y la base rechaza otro.
+  - `v_attribution_stats` por planilla y día.
+  - Salida de `editors`.
+- Worker:
+  - Trae la actividad y atribuye una vez pasado el margen.
+  - Una falla de la API no frena la vuelta.
+- Prueba de mutación:
+  - Si un solo editor da `una_de`, fallan 6 tests.
+  - Sin el margen de 5 minutos, fallan 3.
+- Para QA:
+  - Criterio 3: una edición real de Ariel en su planilla de prueba. No lo puede verificar el agente: requiere editar una planilla y el agente nunca escribe en Sheets.
+  - Pantalla Cambios de la web: sigue mostrando el `actor_id` cuando no hay nombre (fuera de alcance).
+- Alcance del cambio:
+  - `ingest/google.py` (cliente y alcances nuevos).
+  - La vuelta del worker (una llamada a la API por planilla y por hora, más las de las planillas leídas).
+  - `test_import.FakeGoogle`.
+  - `web/queries.editor_names`.
+
+## Post-merge
+
+1. Reconstruir las imágenes: `docker compose -f infra/docker-compose.yml build`.
+2. Migrar la base real: `docker compose -f infra/docker-compose.yml run --rm app craftech-os migrate` (aplica `0005_drive_activity.sql`).
+3. Traer la historia y atribuir lo pendiente: `docker compose -f infra/docker-compose.yml run --rm app craftech-os drive import`. Tarda unos 6–7 minutos y trae unas 63.000 actividades.
+4. Reiniciar el worker: `docker compose -f infra/docker-compose.yml up -d`.
+5. Verificar el criterio 3: editar una celda de la planilla de prueba propia y, después de la vuelta del worker, revisar que el `cell_change` quedó `cierta` con el `actor_id` y la hora de Drive.

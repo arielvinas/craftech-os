@@ -93,13 +93,7 @@ def editor_ids(conn: psycopg.Connection) -> list[str]:
 
 
 def editor_names(conn: psycopg.Connection) -> dict[str, str]:
-    """The person associated with each editor identifier, once editor_profile exists (T-005).
-
-    The latest row per actor_id wins. Empty while the table does not exist.
-    """
-    (exists,) = conn.execute("SELECT to_regclass('editor_profile') IS NOT NULL").fetchone()
-    if not exists:
-        return {}
+    """The person associated with each editor identifier. The latest row per actor_id wins."""
     rows = conn.execute(
         "SELECT DISTINCT ON (actor_id) actor_id, person_name FROM editor_profile"
         " ORDER BY actor_id, created_at DESC, id DESC"

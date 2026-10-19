@@ -1,5 +1,6 @@
 """Import against the test database, with Drive and Sheets faked in memory. No network."""
 
+from datetime import datetime
 from pathlib import Path
 
 import httplib2
@@ -62,7 +63,7 @@ class _Request:
 
 
 class FakeGoogle:
-    """Drive's files() and Sheets' spreadsheets(), only the read calls Google uses."""
+    """Drive's files(), Drive Activity's activity() and Sheets' spreadsheets(): the read calls."""
 
     def __init__(self):
         self.files_by_id = {
@@ -80,15 +81,32 @@ class FakeGoogle:
                 "tabs": [_tab(21, "Resumen", "resumen ficticio")],
             },
         }
+        self.activities = {}  # file id -> Drive Activity entries, newest first
         self.failures = {}  # (call, file id, tab title or None) -> statuses or errors, raised first
         self.calls = []
         self.waits = []
 
     def google(self):
-        return Google(self, self, sleep=self.waits.append)
+        return Google(self, self, sleep=self.waits.append, activity=self)
 
     def files(self):
         return self
+
+    def activity(self):
+        return self
+
+    def query(self, body):
+        """Two activities per page, filtered by 'time >= "<iso>"' if given."""
+        file_id = body["itemName"].removeprefix("items/")
+        found = self.activities.get(file_id, [])
+        if "filter" in body:
+            since = datetime.fromisoformat(body["filter"].split('"')[1])
+            found = [a for a in found if datetime.fromisoformat(a["timestamp"]) >= since]
+        start = int(body.get("pageToken", 0))
+        answer = {"activities": found[start : start + 2]}
+        if start + 2 < len(found):
+            answer["nextPageToken"] = str(start + 2)
+        return _Request(self, ("activity", file_id, body.get("pageToken")), lambda: answer)
 
     def spreadsheets(self):
         return self
