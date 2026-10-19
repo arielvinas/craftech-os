@@ -13,3 +13,4 @@
 - [x] [diff] Borrar la última fila de un rango sumado (=SUM(B4:B5) → =SUM(B4:B4)) deja cambios formula falsos; raro (23 en Pagos de SleakOps Total sobre ~500 borrados simulados) — QA T-004 r2 (hallazgo 1) — resuelto en PR #4 (CodeRabbit)
 - [x] [test-coverage] El corrimiento de columnas en fórmulas del diff no tiene test; si se rompe, una columna insertada daría hasta 1091 formula falsos con la suite en verde — QA T-004 r2 (hallazgo 2) — resuelto en PR #4 (CodeRabbit)
 - [ ] [test-coverage] El corrimiento de referencias a filas vacías debajo de los datos no tiene test — QA T-004 r2 (hallazgo 3, nit)
+- [ ] Tests: StarletteDeprecationWarning de TestClient sobre httpx; revisar al subir Starlette (T-006)
