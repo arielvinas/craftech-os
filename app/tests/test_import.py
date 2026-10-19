@@ -259,7 +259,7 @@ def test_quota_errors_are_retried_with_growing_waits(db, env, fake):
     fake.failures[("grid", "file-a", "Cobros")] = [429, 503]
     assert _import(env) == 0
     assert fake.waits == [1, 2]
-    retries = [e for _, _, e in _events(db, "google_retry")]
+    retries = [e for _, _, e in _events(db, "api_retry")]
     assert retries == [
         {"call": "sheets.get", "status": 429, "attempt": 1, "wait_s": 1},
         {"call": "sheets.get", "status": 503, "attempt": 2, "wait_s": 2},
@@ -271,7 +271,7 @@ def test_a_tab_that_keeps_failing_is_reported_and_the_import_continues(db, env, 
     fake.failures[("grid", "file-a", "Cobros")] = [429] * (MAX_RETRIES + 1)
     assert _import(env) == 1
     assert fake.waits == [2**i for i in range(MAX_RETRIES)]
-    assert len(_events(db, "google_retry")) == MAX_RETRIES
+    assert len(_events(db, "api_retry")) == MAX_RETRIES
     (failed,) = _events(db, "tab_failed")
     assert failed[2] == {"error": "HttpError", "status": 429}
     assert _snapshots(db) == 2
