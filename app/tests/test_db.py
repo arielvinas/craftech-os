@@ -7,15 +7,31 @@ import pytest
 from craftech_os import cli, sources
 from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 
-TABLES = ["read_request", "schema_migration", "snapshot", "source", "source_tab", "system_event"]
-MIGRATIONS = ["0001_sources.sql", "0002_snapshot.sql", "0003_read_request.sql"]
+TABLES = [
+    "cell_change",
+    "issue",
+    "issue_resolution",
+    "read_request",
+    "schema_migration",
+    "snapshot",
+    "source",
+    "source_tab",
+    "system_event",
+]
+MIGRATIONS = [
+    "0001_sources.sql",
+    "0002_snapshot.sql",
+    "0003_read_request.sql",
+    "0004_cell_change_issue.sql",
+]
 
 
 def test_migrate_creates_tables_and_is_idempotent(db):
     assert migrate(db) == MIGRATIONS
     assert migrate(db) == []
     rows = db.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+        "SELECT table_name FROM information_schema.tables"
+        " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
     ).fetchall()
     assert sorted(r[0] for r in rows) == TABLES
 
