@@ -20,6 +20,8 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 COPY config ./config
+# The glossary served by the MCP server (craftech://glosario).
+COPY docs/v0.9.md ./docs/v0.9.md
 RUN uv sync --frozen --no-dev
 
 RUN useradd --system --no-create-home craftech

@@ -14,7 +14,12 @@ cp infra/.env.example infra/.env   # completar: contraseñas solo con letras y n
 docker compose -f infra/docker-compose.yml up -d postgres
 ```
 
-PostgreSQL 16 queda escuchando solo en `127.0.0.1:5432`. Al crear el volumen por primera vez, `infra/postgres-init/01-app-user.sh` crea el usuario de aplicación `craftech_app` (no es superusuario), le da la base `POSTGRES_DB` y crea la base de prueba `<POSTGRES_DB>_test`. Si cambiás `infra/.env` después, ese script no vuelve a correr: borrá el volumen (`docker compose -f infra/docker-compose.yml down -v`) o cambiá la contraseña a mano.
+PostgreSQL 16 queda escuchando solo en `127.0.0.1:5432`. Al crear el volumen por primera vez, `infra/postgres-init/01-app-user.sh` crea el usuario de aplicación `craftech_app` (no es superusuario), le da la base `POSTGRES_DB` y crea la base de prueba `<POSTGRES_DB>_test`, y `02-mcp-roles.sh` crea los usuarios `mcp_reader` y `mcp_writer` del servidor MCP. Si cambiás `infra/.env` después, esos scripts no vuelven a correr: borrá el volumen (`docker compose -f infra/docker-compose.yml down -v`) o cambiá la contraseña a mano. `02-mcp-roles.sh` se puede correr a mano sobre un volumen existente (crea los usuarios o les actualiza la contraseña):
+
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres   # recrea el contenedor con las variables nuevas de infra/.env
+docker compose -f infra/docker-compose.yml exec postgres sh /docker-entrypoint-initdb.d/02-mcp-roles.sh
+```
 
 ## Migraciones y fuentes
 
@@ -125,7 +130,7 @@ Los editores aparecen como "editor sin identificar #N", numerados por orden de p
 docker compose -f infra/docker-compose.yml run --rm app craftech-os editors
 ```
 
-Para ponerle nombre, una fila en `editor_profile` (`actor_id`, `person_name`, `author`, `reason`); la última por editor manda y se ve en la vista `v_editor`. Las notas sobre una planilla, pestaña, cambio o problema van a `annotation`.
+Para ponerle nombre, una fila en `editor_profile` (`actor_id`, `person_name`, `author`, `reason`), que se escribe desde Claude Desktop con `asociar_editor`; la última por editor manda y se ve en la vista `v_editor`. Las notas sobre una planilla, pestaña, cambio o problema van a `annotation` (`anotar`).
 
 ## Web local
 
@@ -141,6 +146,14 @@ Abre en <http://127.0.0.1:8000/> (solo desde esta laptop: no hay login). Es de s
 
 Para correrla fuera de Docker: `DATABASE_URL=... uv run craftech-os web`.
 
+## Claude Desktop (servidor MCP)
+
+Las preguntas sobre los datos se hacen desde Claude Desktop, que arranca `craftech-os mcp` dentro del contenedor `web` y le habla por entrada y salida estándar (sin puerto). Configuración y prueba en `docs/claude-desktop.md`.
+
+- **Consultas** (usuario `mcp_reader`, que solo ve las vistas del esquema `mcp`, en transacciones de solo lectura de 10 segundos como máximo): `listar_cambios`, `ver_cambio`, `listar_problemas`, `ver_problema`, `listar_fuentes`, `listar_editores` y `consultar_sql` (un único `SELECT` o `WITH`, hasta 500 filas). Cada fila trae planilla, pestaña, celda y `leido_en`.
+- **Escrituras** (usuario `mcp_writer`, que solo puede insertar en `issue_resolution`, `annotation` y `editor_profile`): `resolver_problema`, `anotar` y `asociar_editor`, con `autor` y `motivo` obligatorios. Cada una deja un evento `mcp_write` con la herramienta y el autor. Sin `MCP_WRITER_DATABASE_URL`, el servidor arranca sin ellas.
+- **Recursos:** `craftech://catalogo` (cada vista y columna del esquema `mcp` con su comentario, leído de la base) y `craftech://glosario` (sección 2 de `docs/v0.9.md`).
+
 ## Tests
 
 ```bash
@@ -148,9 +161,10 @@ uv run ruff check
 uv run pytest
 ```
 
-Los tests de integración usan la base de prueba y se saltean si `TEST_DATABASE_URL` no está definida. Cada test vacía el esquema `public` de esa base: nunca la apuntes a la base principal (los tests fallan sin tocar nada si el nombre de la base no termina en `_test`).
+Los tests de integración usan la base de prueba y se saltean si `TEST_DATABASE_URL` no está definida. Cada test vacía los esquemas `public` y `mcp` de esa base: nunca la apuntes a la base principal (los tests fallan sin tocar nada si el nombre de la base no termina en `_test`).
 
 ```bash
 export TEST_DATABASE_URL="postgresql://craftech_app:${APP_DB_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}_test"
+export MCP_READER_PASSWORD MCP_WRITER_PASSWORD   # los tests del servidor MCP se conectan con los dos usuarios
 uv run pytest
 ```
