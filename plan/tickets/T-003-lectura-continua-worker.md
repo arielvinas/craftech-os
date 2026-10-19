@@ -7,7 +7,7 @@ lane: core
 depends_on: [T-002]
 effort: M
 milestone: A
-branch:
+branch: arielvinas/t-003
 ---
 
 ## Context
