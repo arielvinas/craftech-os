@@ -115,3 +115,7 @@ Prerrequisito operativo (ADR, seguridad en los límites): FileVault activo en la
 - Correr, en este orden: `docker compose -f infra/docker-compose.yml build app`, `… run --rm app craftech-os migrate`, `… run --rm app craftech-os sources load` y `… run --rm app craftech-os import`.
 - La base de desarrollo ya tiene `0002_snapshot.sql` aplicada desde esta rama y los 342 snapshots. Si la migración cambia antes del merge, hay que recrear la base con `docker compose -f infra/docker-compose.yml down -v` y volver a correr los pasos de arriba.
 
+
+## Decisions
+
+- 2026-10-18 — **Una segunda importación sin cambios en Google agrega snapshots en 4 pestañas de CASH FLOW MENSUAL por ruido de punto flotante del recálculo de Google (hasta 6e-8, misma versión y modifiedTime de Drive). ¿Cómo se resuelve?** → Opción a: ajustar el criterio. Se acepta ese ruido en la capa cruda, sin cambiar el código del hash ni deduplicar por versión de Drive. Distinguir un cambio real queda para T-004 (diferencias celda a celda). El criterio del ticket se reescribe para excluir el ruido de recálculo de fórmulas.
