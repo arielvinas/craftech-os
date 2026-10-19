@@ -1,6 +1,6 @@
 # ADR-002 — Los ingresos se interpretan como proyección determinística de las lecturas, con el cliente resuelto por alias al consultar
 
-**Estado:** propuesto · **Fecha:** 2026-10-19 · **Origen:** `docs/03-proposal.md` §6 (etapa B) y §3.3–3.4, ajustado por ADR-001
+**Estado:** aprobado por Ariel el 2026-10-19 · **Fecha:** 2026-10-19 · **Origen:** `docs/03-proposal.md` §6 (etapa B) y §3.3–3.4, ajustado por ADR-001
 
 ## Necesidad
 
