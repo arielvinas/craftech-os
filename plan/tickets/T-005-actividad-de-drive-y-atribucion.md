@@ -1,7 +1,7 @@
 ---
 id: T-005
 title: Actividad de Drive: importación desde marzo de 2026, perfiles de editor, atribución de cada cambio y anotaciones
-status: pr
+status: done
 priority: high
 lane: core
 depends_on: [T-004]
