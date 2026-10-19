@@ -7,7 +7,7 @@ from pathlib import Path
 import psycopg
 from googleapiclient.errors import HttpError
 
-from craftech_os import attribution, events, migrate, sources, worker
+from craftech_os import attribution, clients, events, migrate, sources, worker
 from craftech_os.diff import store
 from craftech_os.ingest import drive_activity, importer
 from craftech_os.ingest.google import Google, GoogleError
@@ -35,6 +35,22 @@ def cmd_sources_load(args) -> None:
         sources.load(conn, parsed)
     tabs = sum(len(s["tabs"]) for s in parsed)
     print(f"loaded {len(parsed)} sources and {tabs} named tabs from {args.file}")
+
+
+def _counts(counts: dict) -> str:
+    return ", ".join(f"{counts[k]} {k}" for k in ("read", "created", "updated", "skipped"))
+
+
+def cmd_clients_load_zoho(args) -> None:
+    with _connect() as conn:
+        counts = clients.load_zoho(conn, args.file)
+    print(f"razones sociales: {_counts(counts)}")
+
+
+def cmd_aliases_load(args) -> None:
+    with _connect() as conn:
+        counts = clients.load_aliases(conn, args.file)
+    print(f"aliases: {_counts(counts)}; {counts['clients_created']} clients created")
 
 
 def cmd_sources_list(args) -> None:
@@ -255,6 +271,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     resolve_cmd.add_argument("--file", type=Path, default=sources.SOURCES_FILE)
     resolve_cmd.set_defaults(func=cmd_sources_resolve)
+    clients_cmd = commands.add_parser("clients", help="canonical clients and razones sociales")
+    clients_sub = clients_cmd.add_subparsers(required=True)
+    zoho_cmd = clients_sub.add_parser(
+        "load-zoho", help="load the razones sociales of a Zoho Contacts.csv (idempotent)"
+    )
+    zoho_cmd.add_argument("file", type=Path, help="e.g. ~/repos/craftech-os-data/zoho/Contacts.csv")
+    zoho_cmd.set_defaults(func=cmd_clients_load_zoho)
+    aliases_cmd = commands.add_parser("aliases", help="which client is behind a text of a source")
+    aliases_sub = aliases_cmd.add_subparsers(required=True)
+    aliases_load_cmd = aliases_sub.add_parser(
+        "load", help="load alias decisions: fuente, texto, cliente, decidió, motivo (idempotent)"
+    )
+    aliases_load_cmd.add_argument("file", type=Path, help="a CSV outside the repo")
+    aliases_load_cmd.set_defaults(func=cmd_aliases_load)
     import_cmd = commands.add_parser("import", help="read every tab and store snapshots")
     import_cmd.add_argument("--source", help="only the spreadsheet with this exact title")
     import_cmd.add_argument("--file", type=Path, default=sources.SOURCES_FILE)
@@ -304,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
     except (
         migrate.MigrationError,
         sources.SourcesError,
+        clients.ClientsError,
         importer.ImportFailed,
         worker.DumpFailed,
         GoogleError,

@@ -204,6 +204,41 @@ def test_the_writer_cannot_select_or_update(urls, db):
             )
 
 
+def test_the_writer_inserts_clients_and_aliases_audited_but_cannot_change_them(urls, db):
+    with psycopg.connect(urls[1], autocommit=True) as conn:
+        conn.execute("INSERT INTO client (name) VALUES ('Cliente Inventado')")
+        (client_id,) = psycopg.connect(urls[0]).execute("SELECT id FROM mcp.clientes").fetchone()
+        conn.execute(
+            "INSERT INTO client_alias (source, text, client_id, author, reason)"
+            " VALUES ('Cobros', 'inventado', %s, 'Ariel', 'prueba')",
+            (client_id,),
+        )
+        for sql in (
+            "UPDATE client SET name = 'x'",
+            "DELETE FROM client",
+            "UPDATE client_alias SET reason = 'x'",
+            "DELETE FROM client_alias",
+            "UPDATE client_legal_entity SET tax_id = 'x'",
+            "INSERT INTO client_legal_entity (client_id, legal_name, source_system)"
+            " VALUES (1, 'x', 'zoho')",
+        ):
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                conn.execute(sql)
+    events = db.execute(
+        "SELECT details FROM system_event WHERE kind = 'mcp_write' ORDER BY id"
+    ).fetchall()
+    assert events == [
+        ({"herramienta": "vincular_alias", "autor": None},),
+        ({"herramienta": "vincular_alias", "autor": "Ariel"},),
+    ]
+    with psycopg.connect(urls[0]) as reader:
+        for view in ("mcp.clientes", "mcp.razones_sociales", "mcp.aliases"):
+            reader.execute(f"SELECT * FROM {view}").fetchall()
+        assert reader.execute("SELECT cliente, texto FROM mcp.aliases").fetchall() == [
+            ("Cliente Inventado", "inventado")
+        ]
+
+
 def test_a_long_query_is_cut_before_eleven_seconds(server):
     start = time.monotonic()
     with pytest.raises(ToolError, match="statement timeout"):
@@ -371,6 +406,9 @@ def test_the_catalog_describes_every_column_and_the_glossary_has_the_color_grid(
     catalog = anyio.run(read, "craftech://catalogo")
     assert "mcp.changes" in catalog and "Celda en notación A1" in catalog
     assert "## mcp.celdas" in catalog and "`texto` (text)" in catalog
+    for view in ("mcp.clientes", "mcp.razones_sociales", "mcp.aliases"):
+        assert f"## {view}" in catalog
+    assert "Decisiones anteriores" in catalog
     assert "Grilla de colores" in anyio.run(read, "craftech://glosario")
 
 

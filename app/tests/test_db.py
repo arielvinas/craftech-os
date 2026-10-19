@@ -10,10 +10,14 @@ from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 TABLES = [
     "annotation",
     "cell_change",
+    "client",
+    "client_alias",
+    "client_legal_entity",
     "drive_activity",
     "editor_profile",
     "issue",
     "issue_resolution",
+    "legal_entity",
     "read_request",
     "schema_migration",
     "snapshot",
@@ -29,6 +33,7 @@ MIGRATIONS = [
     "0005_drive_activity.sql",
     "0006_mcp_roles_views.sql",
     "0007_mcp_cells.sql",
+    "0008_clients.sql",
 ]
 
 
