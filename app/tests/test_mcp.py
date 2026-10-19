@@ -301,6 +301,8 @@ def test_asociar_editor_names_the_editor_of_each_change(server, db):
         "Persona Ficticia"
     ]
     assert _call(server, "listar_editores")["editores"][0]["nombre_persona"] == "Persona Ficticia"
+    event = db.execute("SELECT details FROM system_event WHERE kind = 'mcp_write'").fetchone()[0]
+    assert event == {"herramienta": "asociar_editor", "autor": "Ariel"}
     with pytest.raises(ToolError, match="no existe"):
         _call(
             server,
