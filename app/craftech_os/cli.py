@@ -1,12 +1,14 @@
 import argparse
 import os
 import sys
+from collections import Counter
 from pathlib import Path
 
 import psycopg
 from googleapiclient.errors import HttpError
 
 from craftech_os import events, migrate, sources, worker
+from craftech_os.diff import store
 from craftech_os.ingest import importer
 from craftech_os.ingest.google import Google, GoogleError
 
@@ -114,6 +116,52 @@ def cmd_read_now(args) -> None:
     print("read requested" if inserted else "already pending")
 
 
+def cmd_diff(args) -> None:
+    """Recompute the changes between two snapshots of a tab and print counts. Writes nothing."""
+    title, name = args.tab
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT t.id FROM source_tab t JOIN source s ON s.id = t.source_id"
+            " WHERE s.title = %s AND t.name = %s",
+            (title, name),
+        ).fetchone()
+        if row is None:
+            raise sources.SourcesError(f"no tab {name!r} in {title!r}")
+        (tab_id,) = row
+        to_id = (
+            args.to_id
+            or conn.execute(
+                "SELECT max(id) FROM snapshot WHERE source_tab_id = %s", (tab_id,)
+            ).fetchone()[0]
+        )
+        from_id = (
+            args.from_id
+            or conn.execute(
+                "SELECT max(id) FROM snapshot WHERE source_tab_id = %s AND id < %s", (tab_id, to_id)
+            ).fetchone()[0]
+        )
+        if from_id is None or to_id is None:
+            raise sources.SourcesError(f"{name!r} in {title!r} has fewer than two snapshots")
+        mine = {
+            r[0]
+            for r in conn.execute(
+                "SELECT id FROM snapshot WHERE source_tab_id = %s AND id IN (%s, %s)",
+                (tab_id, from_id, to_id),
+            )
+        }
+        if mine != {from_id, to_id}:
+            raise sources.SourcesError(f"snapshots {from_id} and {to_id} are not both of {name!r}")
+        result = store.changes(conn, tab_id, from_id, to_id)
+    counts = Counter(c["change_type"] for c in result["changes"])
+    print(
+        f"snapshots {from_id} -> {to_id}"
+        + (" (by position: schema not found)" if result["positional"] else "")
+    )
+    for change_type, n in sorted(counts.items()):
+        print(f"  {change_type} {n}")
+    print(f"{sum(counts.values())} changes, ambiguous {len(result['ambiguous'])}")
+
+
 def cmd_worker(args) -> None:
     google = Google.from_environment()
     with _connect() as conn:
@@ -154,6 +202,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     read_now_cmd.add_argument("title", help="the exact title in sources.yaml")
     read_now_cmd.set_defaults(func=cmd_read_now)
+    diff_cmd = commands.add_parser(
+        "diff", help="recompute the changes between two snapshots of a tab (counts only)"
+    )
+    diff_cmd.add_argument(
+        "--tab", nargs=2, required=True, metavar=("SPREADSHEET", "TAB"), help="exact names"
+    )
+    diff_cmd.add_argument("--from", dest="from_id", type=int, help="default: the one before --to")
+    diff_cmd.add_argument("--to", dest="to_id", type=int, help="default: the latest snapshot")
+    diff_cmd.set_defaults(func=cmd_diff)
     worker_cmd = commands.add_parser("worker", help="read changed spreadsheets every five minutes")
     worker_cmd.add_argument("--dir", type=Path, default=worker.BACKUPS_DIR, help="for the dumps")
     worker_cmd.set_defaults(func=cmd_worker)

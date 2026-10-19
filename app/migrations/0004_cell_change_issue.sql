@@ -38,8 +38,8 @@ COMMENT ON COLUMN cell_change.block IS 'Bloque de la pestaña donde está la fil
 COMMENT ON COLUMN cell_change.row_key IS 'Clave de la fila: el texto de la columna clave normalizado (minúsculas, sin acentos, sin espacios dobles), sin pasar por aliases. Nula en pestañas sin esquema y en filas sin clave.';
 COMMENT ON COLUMN cell_change.row_ordinal IS 'Orden de aparición de la fila entre las que tienen la misma clave en el mismo bloque (1, 2, ...): dos filas con la misma clave son dos series legítimas (regla R26).';
 COMMENT ON COLUMN cell_change.cell_ref IS 'Celda en notación A1 (por ejemplo D17), en las coordenadas de la versión nueva. Nula en cambios de fila o de pestaña, y en celdas de una columna que ya no existe.';
-COMMENT ON COLUMN cell_change.old_value IS 'Valor anterior tal como se ve en la planilla (texto formateado). En tab_renamed, el nombre anterior de la pestaña.';
-COMMENT ON COLUMN cell_change.new_value IS 'Valor nuevo tal como se ve en la planilla (texto formateado). En column_inserted, el encabezado nuevo; en tab_added y tab_renamed, el nombre de la pestaña.';
+COMMENT ON COLUMN cell_change.old_value IS 'Valor anterior tal como se ve en la planilla (texto formateado). En row_moved y row_deleted, el número de fila anterior; en tab_renamed, el nombre anterior de la pestaña.';
+COMMENT ON COLUMN cell_change.new_value IS 'Valor nuevo tal como se ve en la planilla (texto formateado). En row_moved y row_inserted, el número de fila nuevo; en column_inserted, el encabezado nuevo; en tab_added y tab_renamed, el nombre de la pestaña.';
 COMMENT ON COLUMN cell_change.old_formula IS 'Fórmula anterior, si la celda tenía.';
 COMMENT ON COLUMN cell_change.new_formula IS 'Fórmula nueva, si la celda tiene.';
 COMMENT ON COLUMN cell_change.old_color IS 'Color de fondo anterior en hexadecimal (#rrggbb).';

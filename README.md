@@ -61,7 +61,7 @@ La clave de la cuenta de servicio (`finance-bot-ingest`, solo lectura) vive en `
    docker compose -f infra/docker-compose.yml run --rm app craftech-os import
    ```
 
-   Guarda una foto (`snapshot`) por pestaña, ocultas incluidas, salvo que el contenido sea idéntico a la última foto. Registra en `source_tab` el identificador de cada pestaña y las que Google tiene y el archivo no (como `SIN_CLASIFICAR`). Cada lectura, reintento y error queda en `system_event`, con identificadores y conteos, nunca valores. Al final imprime un resumen por planilla y las diez pestañas más lentas; si alguna lectura falló, termina con error.
+   Guarda una foto (`snapshot`) por pestaña, ocultas incluidas, salvo que el contenido sea idéntico a la última foto. Registra en `source_tab` el identificador de cada pestaña y las que Google tiene y el archivo no (como `SIN_CLASIFICAR`, con un problema `pestana_sin_clasificar`). Cada lectura, reintento y error queda en `system_event`, con identificadores y conteos, nunca valores. Al final imprime un resumen por planilla y las diez pestañas más lentas; si alguna lectura falló, termina con error.
 
 ## Lectura continua (worker)
 
@@ -91,6 +91,22 @@ Para revisar el contenido de un dump:
 
 ```bash
 docker compose -f infra/docker-compose.yml run --rm app pg_restore --list /backups/craftech-os-AAAA-MM-DD.dump
+```
+
+## Cambios y problemas
+
+Cada foto nueva de una pestaña se compara con la anterior en la misma transacción que la guarda (en `import` y en el worker). Los cambios van a `cell_change`: `value`, `formula_overridden` (había fórmula y ahora hay un valor tipeado), `formula`, `color`, `emptied`, `row_inserted`, `row_deleted`, `row_moved`, `column_inserted`, y los de pestaña `tab_added`, `tab_deleted`, `tab_renamed`. Cada comparación deja un evento `tab_diffed` con la cantidad por tipo; los valores anterior y nuevo solo están en `cell_change`, que se lee desde la base.
+
+- **Pestañas con esquema** (`schemas:` en `config/sources.yaml`: texto de la fila de encabezado, columna clave, textos que abren cada bloque en esa columna, columnas de la grilla de meses): las filas se alinean por la clave normalizada (minúsculas, sin acentos, sin espacios dobles) dentro de cada bloque, así que insertar una fila arriba es un solo `row_inserted`. Dos filas con la misma clave se siguen por orden; si esa cantidad cambia, o una fila cambia de clave y de lugar a la vez, se comparan por posición y queda un problema `alineacion_ambigua`. Si la fila de encabezado no aparece, la pestaña se compara por posición y queda un evento `schema_mismatch`.
+- **Pestañas sin esquema** (todas menos "Pagos", "Pagos ARG" y "VENTAS" de las dos de facturación y "FUNDINGS"): se comparan celda a celda por posición; insertar una fila arriba cambia todas las de abajo. Para alinear otra pestaña por clave se le agrega un esquema en el YAML y `sources load`, sin tocar código.
+- **Renombrar una pestaña:** si se renombra solo en Google, el worker la sigue por su identificador y deja `tab_renamed`. Hay que renombrarla también en `config/sources.yaml`; si no, el próximo `sources load` crea una fila nueva con el nombre viejo y la pestaña renombrada vuelve como `SIN_CLASIFICAR`.
+
+Problemas (`issue`, con su estado en la vista `v_issue`): `color_desconocido` (un color en la grilla de meses que no es uno de los cinco de la regla R29, uno por pestaña y color), `valor_ilegible` (texto en la grilla de meses, por pestaña, fila y columna), `alineacion_ambigua` y `pestana_sin_clasificar`. Verlo de nuevo solo actualiza `last_seen_at`. El estado sale de la última fila de `issue_resolution`: `abierto` sin resolución, `ignorado` (no se reabre), `resuelto`, y `reabierto` si se volvió a ver después de resuelto. Una celda vacía que solo tiene color no se guarda en la foto, así que su color no se detecta.
+
+Para recalcular a mano las diferencias entre las dos últimas fotos de una pestaña (o entre dos fotos dadas), sin guardar nada; imprime solo cantidades:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app craftech-os diff --tab "Facturación - Craftech Total" "Pagos" [--from <id> --to <id>]
 ```
 
 ## Tests
