@@ -188,7 +188,7 @@ def test_import_stores_one_snapshot_per_tab_and_registers_tabs(db, env, fake, ca
         for name, version in [("Cobros", 41), ("Nueva", 41), ("Resumen", 7)]
     ]
     assert [e[2]["tab"] for e in _events(db, "tab_unclassified")] == ["Nueva"]
-    assert [e[2]["tab"] for e in _events(db, "tab_missing")] == ["Borrada"]
+    assert {e[2]["tab"] for e in _events(db, "tab_missing")} == {"Borrada"}
     reads = _events(db, "tab_read")
     assert len(reads) == 3
     assert all(d is not None and e["cell_count"] == 2 and e["stored"] for _, d, e in reads)
@@ -216,6 +216,25 @@ def test_sources_load_leaves_tabs_found_in_google_alone(db, env, fake):
     assert cli.main(["sources", "load", "--file", str(env)]) == 0
     assert ("Nueva", 12, "SIN_CLASIFICAR", True) in _tabs(db)
     assert ("Resumen", 21, "DERIVADA", True) in _tabs(db)
+
+
+def test_a_tab_recreated_with_the_same_name_takes_the_new_sheet_id(db, env, fake):
+    assert _import(env) == 0
+    fake.files_by_id["file-a"]["tabs"][0]["properties"]["sheetId"] = 99
+    assert _import(env) == 0
+    assert ("Cobros", 99, "CARGA", True) in _tabs(db)
+    assert {e[2]["tab"] for e in _events(db, "tab_missing")} == {"Borrada"}
+
+
+def test_a_tab_renamed_in_google_and_in_the_list_keeps_its_class(db, env, fake):
+    assert _import(env) == 0
+    fake.files_by_id["file-a"]["tabs"][0]["properties"]["title"] = "Cobros 2026"
+    env.write_text(SOURCES.replace('"Cobros"', '"Cobros 2026"'), encoding="utf-8")
+    assert _import(env) == 0
+    assert ("Cobros 2026", 11, "CARGA", True) in _tabs(db)
+    assert ("Cobros", None, "CARGA", False) in _tabs(db)
+    assert [e[2]["tab"] for e in _events(db, "tab_unclassified")] == ["Nueva"]
+    assert {e[2]["tab"] for e in _events(db, "tab_missing")} == {"Borrada"}
 
 
 def test_no_event_or_output_contains_cell_values(db, env, fake, capsys):

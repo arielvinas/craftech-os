@@ -119,6 +119,14 @@ def test_all_tabs_source_keeps_tabs_registered_on_read(db):
     assert _tabs(db) == [("P", "read later", "DERIVADA", True)]
 
 
+def test_renamed_source_keeps_its_drive_id(db):
+    migrate(db)
+    sources.load(db, sources.parse("sources: [{title: A, drive_id: x, all_tabs: CARGA}]"))
+    sources.load(db, sources.parse("sources: [{title: B, drive_id: x, all_tabs: CARGA}]"))
+    rows = db.execute("SELECT title, drive_id FROM source ORDER BY title").fetchall()
+    assert rows == [("A", None), ("B", "x")]
+
+
 def test_cli_end_to_end(db, monkeypatch, capsys):
     monkeypatch.setenv("DATABASE_URL", db.info.dsn + " password=" + (db.info.password or ""))
     assert cli.main(["migrate"]) == 0

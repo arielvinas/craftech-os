@@ -56,12 +56,19 @@ def register_tabs(
     rows = conn.execute(
         "SELECT id, sheet_id, name, active FROM source_tab WHERE source_id = %s", (source_id,)
     ).fetchall()
+    google_ids = {props["sheetId"] for props in google_tabs}
     by_sheet = {r[1]: r for r in rows if r[1] is not None}
-    by_name = {r[2]: r for r in rows if r[1] is None}
+    # A row whose sheet_id Google no longer has (the tab was recreated) matches by name too.
+    by_name = {r[2]: r for r in rows if r[1] is None or r[1] not in google_ids}
     found = []
     for props in google_tabs:
         sheet_id, title = props["sheetId"], props["title"]
-        row = by_sheet.get(sheet_id) or by_name.get(title)
+        row, named = by_sheet.get(sheet_id), by_name.get(title)
+        if named is not None and named[3] and (row is None or not row[3]):
+            # The tab was renamed in sources.yaml: the active row with the new name wins.
+            if row is not None:
+                conn.execute("UPDATE source_tab SET sheet_id = NULL WHERE id = %s", (row[0],))
+            row = named
         cls = default_class or UNCLASSIFIED
         if row is None:
             (tab_id,) = conn.execute(

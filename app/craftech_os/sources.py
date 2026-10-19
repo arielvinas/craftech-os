@@ -108,6 +108,8 @@ def load(conn: psycopg.Connection, sources: list[dict]) -> None:
     An all_tabs source gives its class to every tab it has.
     """
     with conn.transaction():
+        # The list owns every drive_id: clearing them first lets a renamed source keep its id.
+        conn.execute("UPDATE source SET drive_id = NULL WHERE drive_id IS NOT NULL")
         for s in sources:
             (source_id,) = conn.execute(
                 """

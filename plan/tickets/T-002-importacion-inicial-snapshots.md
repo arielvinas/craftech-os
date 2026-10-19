@@ -107,7 +107,7 @@ Prerrequisito operativo (ADR, seguridad en los límites): FileVault activo en la
   - `resolve` parcial, con duplicados.
   - No hay `DELETE`, `UPDATE` ni `TRUNCATE` sobre `snapshot` en el código.
 - **QA en vivo**: correr `craftech-os import --source "Facturación - Craftech Total"` y las consultas de conteo de arriba. Nunca imprimir `content`. En la ronda de arreglos la corrí de nuevo: `source_read` dio 0 stored, 47 unchanged, 0 failed.
-- **Criterio 3 reescrito**: una re-corrida puede sumar snapshots solo en pestañas con la misma `drive_version` y el mismo `drive_modified_at` que su snapshot anterior (hoy, las 4 de "CASH FLOW MENSUAL"); cualquier otra pestaña con un snapshot nuevo sin cambio en Google es un fallo.
+- **Criterio 3 reescrito**: una re-corrida puede sumar snapshots solo en pestañas con la misma `drive_version` y el mismo `drive_modified_at` que su snapshot anterior y cuyo único cambio de contenido es el valor efectivo de celdas con fórmula por ruido del recálculo (hoy, las 4 de "CASH FLOW MENSUAL"); cualquier otra pestaña con un snapshot nuevo sin cambio en Google es un fallo.
 - **Dependencias**: `pyproject.toml` declara `httplib2` y `google-auth-httplib2`; la imagen construida importa `httplib2.decode` y `google_auth_httplib2`.
 - **Radio de impacto**: `sources load` (T-001) cambió en dos cosas: guarda `drive_id` y respeta las `SIN_CLASIFICAR`. `source_tab` tiene una restricción única nueva, `(source_id, sheet_id)`.
 
