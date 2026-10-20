@@ -32,7 +32,7 @@
 - **Actual:** como el corte de meses ahora va antes de la condición de "sin clave", una fila sin clave dentro de un bloque de funding, con monto en marzo de 2026 o después, se saltea en silencio. En la ronda 1 abría `fila_sin_interpretar`. Es coherente con la regla R28: después del corte, el tracker tiene los hitos y Pagos no da nada. Además, para la fila de apertura era necesario: si no, las celdas T96, X96, S77 e Y77, de 2026, abrirían problemas. Se anota solo porque cambia el comportamiento.
 
 ### F3 [minor] (sigue de la ronda 1, F4) El único `funding_duplicado` real parece un falso positivo
-- Sigue igual: cruza la celda I4 de FUNDINGS (alephee, cargado el 25/2/2026) con la celda K110 de Pagos de Craftech (alephee (2), agosto de 2025). Ahora está en el ticket como la pregunta pendiente 3 para Emi y Ro (si hay que acotar el cruce por fecha). No es decisión de implement ni de QA, y el problema solo avisa: no junta ni borra nada.
+- Sigue igual: cruza la celda I4 de FUNDINGS (cargado en febrero de 2026) con la celda K110 de Pagos de Craftech (el mismo cliente con otro texto de alias, agosto de 2025). Ahora está en el ticket como la pregunta pendiente 3 para Emi y Ro (si hay que acotar el cruce por fecha). No es decisión de implement ni de QA, y el problema solo avisa: no junta ni borra nada.
 
 ## Re-verificación de la ronda anterior
 
@@ -50,7 +50,7 @@
   - "tracker missing column issue";
   - "tracker unreadable amount";
   - "copied amounts are milestones", ahora con la copia `='Otra planilla'!D5` en una fila de cliente.
-- **F4 (r1, minor), duplicado alephee:** sigue abierto como pregunta para Emi y Ro. Ver F3 de esta ronda.
+- **F4 (r1, minor), el único duplicado real:** sigue abierto como pregunta para Emi y Ro. Ver F3 de esta ronda.
 - **F5 (r1, minor), "General" como bloque de funding sin ratificar:** documentado como la pregunta 2. Ahora las dos planillas lo tratan igual. Cambiar `funding_blocks` de SleakOps no toca facturas: `pagos.py` solo lee facturas del bloque del encabezado.
 
 ## Criterios
@@ -59,13 +59,13 @@
 2. Hito del tracker en `mcp.fundings` con origen `tracker`, cobro = sign-off + 30 días y celda: ✓ en tests y en la lectura real (94 hitos del tracker).
 3. Enero de 2026 da hito `pagos` y marzo de 2026 no: ✓ en tests. El mutante "off by one" del corte (`LAST_PAGOS_MONTH` en enero) muere.
 4. El duplicado abre `funding_duplicado` y quedan las dos filas: ✓. Ahora también está probado el negativo (distinto monto, distinto cliente) y la unión por alias.
-5. Paridad en 0 con datos consistentes: ✓ en tests. Con las lecturas reales, `mcp.paridad_fundings` coincide exactamente con la tabla del ticket: la única diferencia es Craftech en 2026-06, de 18.000.
+5. Paridad en 0 con datos consistentes: ✓ en tests. Con las lecturas reales, `mcp.paridad_fundings` coincide exactamente con la tabla del ticket: la única diferencia es un mes de Craftech (2026-06).
 6. Ninguna vista de facturas incluye fundings: ✓ en tests. En la base real, el cruce de celdas entre `mcp.facturas` y `mcp.fundings` da 0.
 
 ## No verificado
 
 - **Criterios 2, 3 y 5 en la planilla de prueba de Ariel:** QA no escribe en Google Sheets. Falta el paso humano: cargar un hito en la planilla de prueba y ver la fila y la celda en `mcp.fundings`.
-- **Diferencia de 18.000 en junio de 2026:** no es un error de esta ronda. Es la consecuencia documentada del supuesto del ADR: un hito cargado antes del corte y cobrado después no queda en ningún lado, y la paridad lo muestra (no es silencioso). Depende de la respuesta de Ro sobre el criterio de corte.
+- **Diferencia en junio de 2026:** no es un error de esta ronda. Es la consecuencia documentada del supuesto del ADR: un hito cargado antes del corte y cobrado después no queda en ningún lado, y la paridad lo muestra (no es silencioso). Depende de la respuesta de Ro sobre el criterio de corte.
 - **Navegador:** no aplica, no hay interfaz en esta etapa.
 
 ## Split-outs sugeridos (fuera del alcance)

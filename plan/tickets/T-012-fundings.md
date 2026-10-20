@@ -96,7 +96,7 @@ Cada celda con monto de esas filas, en una columna de mes hasta febrero de 2026,
 - los montos traídos de otra planilla (fórmulas con `!` o `IMPORTRANGE`);
 - los meses desde marzo de 2026.
 
-**Fila que abre un bloque de funding (ronda 1 de QA).** En "General" esa fila trae montos tipeados del programa CEI ("General | CEI | CEI"): en Craftech las celdas E96, H96, K96 y N96 (123.000 USD de 2025); en SleakOps las celdas E102, H102 y K102 (122.000 USD de 2025). Que sean hitos del programa CEI es una regla financiera no ratificada, así que **no se interpretan como hito, pero tampoco se descartan**: cada monto tipeado de esa fila, en un mes hasta febrero de 2026, abre `fila_sin_interpretar` con clave bloque + clave de la fila + columna (por ejemplo `General:general:E`) y la celda. Las copias de otra planilla y los meses desde marzo de 2026 siguen sin dar nada, igual que en las filas de cliente. Verificado en la base local el 20-oct-2026: se abren los siete problemas, y los hitos siguen siendo 91 en Craftech y 10 en SleakOps.
+**Fila que abre un bloque de funding (ronda 1 de QA).** En "General" esa fila trae montos tipeados del programa CEI ("General | CEI | CEI"): en Craftech las celdas E96, H96, K96 y N96 (meses de 2025); en SleakOps las celdas E102, H102 y K102 (meses de 2025). Que sean hitos del programa CEI es una regla financiera no ratificada, así que **no se interpretan como hito, pero tampoco se descartan**: cada monto tipeado de esa fila, en un mes hasta febrero de 2026, abre `fila_sin_interpretar` con clave bloque + clave de la fila + columna (por ejemplo `General:general:E`) y la celda. Las copias de otra planilla y los meses desde marzo de 2026 siguen sin dar nada, igual que en las filas de cliente. Verificado en la base local el 20-oct-2026: se abren los siete problemas, y los hitos siguen siendo 91 en Craftech y 10 en SleakOps.
 
 El programa sale de la columna B. **"General" se toma como bloque de funding** porque sus filas son programas de AWS (MAP, POC CASH, CEI). En Craftech de ahí salen 89 de los 91 hitos de Pagos. Esos montos nunca fueron facturas: solo el bloque del encabezado da facturas. Es un supuesto de implementación, no ratificado: está en las preguntas pendientes de abajo.
 
@@ -114,7 +114,7 @@ El programa sale de la columna B. **"General" se toma como bloque de funding** p
 - clave: pestaña del tracker + fila, más pestaña de Pagos + bloque + fila + mes;
 - detalle: planilla, pestaña y celda de cada lado, sin montos.
 
-Es una heurística: dos fundings distintos del mismo cliente por el mismo monto también se marcan, y un mismo funding con montos distintos en cada lado no se detecta. El único caso real parece un falso positivo (hallazgo F4 de QA): cruza la celda I4 de FUNDINGS (alephee, POC, cargado el 25/2/2026) con la celda K110 de Pagos de Craftech (alephee (2), POC CASH, agosto de 2025). No se acotó por fecha porque la ventana sería una regla nueva sin ratificar; el problema solo avisa, no borra ni junta nada.
+Es una heurística: dos fundings distintos del mismo cliente por el mismo monto también se marcan, y un mismo funding con montos distintos en cada lado no se detecta. El único caso real parece un falso positivo (hallazgo F4 de QA): cruza la celda I4 de FUNDINGS (cargado en febrero de 2026) con la celda K110 de Pagos de Craftech (el mismo cliente con otro texto de alias, agosto de 2025). No se acotó por fecha porque la ventana sería una regla nueva sin ratificar; el problema solo avisa, no borra ni junta nada.
 
 **Preguntas pendientes para Emi y Ro (no bloquean; mientras tanto nada se pierde):**
 1. La fila "General | CEI | CEI" de Pagos, en Craftech y en SleakOps, ¿es un hito por mes del programa CEI? Hoy cada monto abre `fila_sin_interpretar`. Si dicen que sí, se cambia la fila de apertura de "General" para que dé hito.
@@ -127,22 +127,9 @@ Es una heurística: dos fundings distintos del mismo cliente por el mismo monto 
 - Ningún hito tiene cliente todavía: no hay alias cargados para estas fuentes, así que se abren `alias_sin_cliente`.
 - Hay 1 `funding_duplicado`, con un hito de Pagos de agosto de 2025.
 
-Paridad real por mes. Solo se listan los meses con suma o diferencia; el resto da 0 contra 0.
+Paridad real por mes: todos los meses dan 0 salvo uno, Craftech en 2026-06 (los montos están en `mcp.paridad_fundings` de la base local, no en el repo).
 
-| Unidad | Mes | Pagos confirmados | Suma interpretada | Diferencia |
-|---|---|---|---|---|
-| Craftech | 2026-04 | 6.000 | 6.000 | 0 |
-| Craftech | 2026-05 | 118.809 | 118.809 | 0 |
-| Craftech | 2026-06 | 177.141 | 159.141 | **18.000** |
-| Craftech | 2026-07 | 157.083 | 157.083 | 0 |
-| Craftech | 2026-08 | 29.400 | 29.400 | 0 |
-| Craftech | 2026-09 | 85.246 | 85.246 | 0 |
-| Craftech | 2026-10 | 515.683 | 515.683 | 0 |
-| Craftech | 2026-11 | 29.065 | 29.065 | 0 |
-| SleakOps | 2026-04 | 24.000 | 24.000 | 0 |
-| SleakOps | 2026-10 | 21.000 | 21.000 | 0 |
-
-**Por qué hay diferencia en junio de 2026.** "Pagos confirmados" suma todas las filas del tracker con invoice cargada, también las cargadas antes del corte. En junio de 2026 se pagó una fila de Craftech cargada en el portal el 9/1/2026. Por la regla R28 esa fila no da hito en el tracker. Tampoco lo da en Pagos, porque su cobro cae después de febrero de 2026. Con el supuesto vigente, **un hito cargado antes del corte y cobrado después no queda en ningún lado**. Esto alimenta la pregunta abierta a Ro: ¿el corte lo decide la columna de mes o la fecha de carga?
+**Por qué hay diferencia en junio de 2026.** "Pagos confirmados" suma todas las filas del tracker con invoice cargada, también las cargadas antes del corte. En junio de 2026 se pagó una fila de Craftech cargada en el portal en enero de 2026. Por la regla R28 esa fila no da hito en el tracker. Tampoco lo da en Pagos, porque su cobro cae después de febrero de 2026. Con el supuesto vigente, **un hito cargado antes del corte y cobrado después no queda en ningún lado**. Esto alimenta la pregunta abierta a Ro: ¿el corte lo decide la columna de mes o la fecha de carga?
 
 ## Test plan
 
