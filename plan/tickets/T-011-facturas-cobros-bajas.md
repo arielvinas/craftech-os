@@ -1,7 +1,7 @@
 ---
 id: T-011
 title: Facturas, cobros y bajas: interpretación de Pagos y Pagos ARG por color, cobros desde los cambios de celda y paridad con los totales
-status: qa
+status: in-progress
 priority: high
 lane: core
 depends_on: [T-010]
