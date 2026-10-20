@@ -1,4 +1,5 @@
-"""The local web: read-only screens Cambios, Problemas and Fuentes, and the "leer ahora" button.
+"""The local web: read-only screens Cambios, Problemas, Fuentes, Facturas, Fundings and Clientes,
+and the "leer ahora" button.
 
 No login in the v0, so the port is published on 127.0.0.1 only. Every page is rendered on the
 server; filters are GET forms validated against closed lists before reaching the database.
@@ -40,6 +41,11 @@ READ_RESULTS = {
     "pending": "Ya había un pedido pendiente para esta planilla: no se creó otro.",
     "no_drive_id": "La planilla no tiene identificador de Drive: no se puede leer.",
 }
+INVOICE_STATES = ("a facturar", "a confirmar", "confirmada", "enviada", "pagada", "retraso")
+LEGAL_ENTITIES = ("Craftech S.A.", "Craftech-io Inc.")
+# The background color of each state in the spreadsheet (rule R29), for the swatch.
+STATE_COLORS = dict(zip(INVOICE_STATES, ("#ffffff", "#00ffff", "#4a86e8", "#ff9900", "#d9ead3",
+                                         "#ff00ff"), strict=True))  # fmt: skip
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 MAX_TEXT = 200
 
@@ -53,6 +59,7 @@ env.filters["when"] = lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S") if dt else "�
 env.filters["duration"] = lambda td: (
     str(td - timedelta(microseconds=td.microseconds)) if td else "—"
 )
+env.filters["money"] = lambda v: "—" if v is None else f"{v:,.2f}"
 env.filters["pretty_json"] = lambda v: json.dumps(v, ensure_ascii=False, indent=2)
 env.tests["hex_color"] = lambda v: bool(v and HEX_COLOR.match(v))
 templates = Jinja2Templates(env=env)
@@ -114,6 +121,19 @@ def _date(params, name: str) -> date | None:
         return date.fromisoformat(value)
     except ValueError:
         raise _bad(name) from None
+
+
+def _month(params) -> date:
+    """A YYYY-MM month as its first day; the current month when absent."""
+    value = params.get("mes", "")
+    if value == "":
+        return date.today().replace(day=1)
+    if len(value) != 7:
+        raise _bad("mes")
+    try:
+        return date.fromisoformat(f"{value}-01")
+    except ValueError:
+        raise _bad("mes") from None
 
 
 def _page(params) -> int:
@@ -259,6 +279,51 @@ def leer_ahora(source_id: int):
     if result is None:
         raise HTTPException(404, "No existe esa planilla.")
     return RedirectResponse(f"/fuentes?resultado={result}#fuente-{source_id}", status_code=303)
+
+
+@app.get("/facturas", response_class=HTMLResponse)
+def facturas(request: Request):
+    p = request.query_params
+    f = {
+        "mes": _month(p),
+        "estado": _choice(p, "estado", INVOICE_STATES),
+        "entidad": _choice(p, "entidad", LEGAL_ENTITIES),
+        "cliente": _id(p, "cliente"),
+    }
+    with _connect() as conn:
+        context = {
+            "rows": queries.invoices(conn, f),
+            "parity": queries.invoice_parity(conn, f["mes"]),
+            "months": queries.invoice_months(conn),
+            "clients": queries.clients(conn),
+        }
+    return templates.TemplateResponse(
+        request,
+        "facturas.html",
+        {
+            **context,
+            "f": f,
+            "states": INVOICE_STATES,
+            "colors": STATE_COLORS,
+            "entities": LEGAL_ENTITIES,
+        },
+    )
+
+
+@app.get("/fundings", response_class=HTMLResponse)
+def fundings(request: Request):
+    with _connect() as conn:
+        rows = queries.fundings(conn)
+        parity = queries.funding_parity(conn)
+    return templates.TemplateResponse(request, "fundings.html", {"rows": rows, "parity": parity})
+
+
+@app.get("/clientes", response_class=HTMLResponse)
+def clientes(request: Request):
+    with _connect() as conn:
+        rows = queries.client_rows(conn)
+        without = queries.rows_without_client(conn)
+    return templates.TemplateResponse(request, "clientes.html", {"rows": rows, "without": without})
 
 
 def _error_page(request: Request, status: int, message: str):
