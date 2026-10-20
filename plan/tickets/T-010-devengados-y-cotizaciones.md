@@ -81,11 +81,11 @@ Verificado en el repo el 19-oct-2026:
 
 - [ ] Cuando el worker guarda una lectura nueva de VENTAS en la planilla de prueba, `mcp.devengados` muestra los devengados de esa lectura, cada uno con planilla, pestaña, celda y `lectura_id` que llevan a la celda de origen.
 - [ ] Si se edita un monto en VENTAS de la planilla de prueba, después de la lectura siguiente cambia el devengado y no quedan filas de la lectura anterior.
-- [ ] Una fila con un cliente inventado sin alias abre `alias_sin_cliente`; después de cargar ese alias, el devengado muestra el cliente sin reinterpretar.
-- [ ] `craftech-os interpret --all` corrido dos veces seguidas deja las mismas filas en `accrual` y `fx_rate` y no duplica problemas.
-- [ ] Con las filas de cotización corridas en el fixture, las cotizaciones salen iguales. Con la MEP de control distinta de la operativa se abre `cotizacion_discrepante`.
-- [ ] `system_event` registra los segundos por pestaña; en la base local con las lecturas actuales, ninguna pestaña supera los 10 segundos (el tiempo medido queda en `## Implementation`).
-- [ ] Ningún log ni `details` de un problema contiene montos.
+- [x] Una fila con un cliente inventado sin alias abre `alias_sin_cliente`; después de cargar ese alias, el devengado muestra el cliente sin reinterpretar.
+- [x] `craftech-os interpret --all` corrido dos veces seguidas deja las mismas filas en `accrual` y `fx_rate` y no duplica problemas.
+- [x] Con las filas de cotización corridas en el fixture, las cotizaciones salen iguales. Con la MEP de control distinta de la operativa se abre `cotizacion_discrepante`.
+- [x] `system_event` registra los segundos por pestaña; en la base local con las lecturas actuales, ninguna pestaña supera los 10 segundos (el tiempo medido queda en `## Implementation`).
+- [x] Ningún log ni `details` de un problema contiene montos.
 
 ## Out of scope
 
@@ -96,3 +96,37 @@ Verificado en el repo el 19-oct-2026:
 ## Decisions
 
 - 2026-10-20 — **¿Cómo se identifica la fuente de un alias? Hoy es texto libre y 'Pagos' y 'pagos' quedan como dos fuentes distintas (pregunta que dejó QA de T-009).** → Planilla + pestaña: la fuente de un alias es el par planilla y pestaña; el mismo alias en la misma pestaña es uno solo, sin distinguir mayúsculas. Si cambiar esto no entra en el alcance de T-010, registrarlo en plan/improvements.md.
+
+## Implementation
+
+- `app/migrations/0009_accruals_fx.sql`: tablas `accrual` y `fx_rate` (únicas por pestaña, bloque, clave y mes, y por tipo, mes y pestaña), los siete tipos de problema nuevos en el CHECK de `issue`, y las vistas `mcp.devengados` (cliente por el alias vigente de la fuente "planilla / pestaña") y `mcp.cotizaciones`, con comentarios y `GRANT` a `mcp_reader`.
+- `app/craftech_os/interpret/`: `run(conn, snapshot_id)` borra e inserta los hechos de la pestaña en una transacción, abre los problemas y registra `tab_interpreted` (milisegundos y cantidades). `ventas.py` y `pagos_arg.py` son los intérpretes; `cells.py` lee meses y números de la grilla.
+- Enganche: `ingest/importer.py` llama a `interpret.run` después de `store.record`, dentro de la misma transacción; el worker pasa por ahí.
+- `craftech-os interpret --all | --tab <id>` reinterpreta la última lectura.
+- Decisión del 20-oct (fuente de alias = planilla + pestaña): `aliases load` normaliza la `fuente`; README explica el formato "Planilla / Pestaña". Cerrado en `plan/improvements.md`.
+- La MEP operativa es la última fila "MEP" de la pestaña; las anteriores son de control. "Dólar oficial" se ubica aunque esté arriba del encabezado.
+- Medido en la base local (20-oct-2026, `interpret --all`, lecturas actuales): Craftech Pagos ARG 10 ms (72 cotizaciones), Craftech VENTAS 53 ms (860 devengados), SleakOps Pagos ARG 3 ms (72), SleakOps VENTAS 30 ms (1057). El comando completo tardó 4,2 s.
+- Lo que encontró en datos reales: 1 `cotizacion_discrepante` en Craftech (MEP de control distinta de la operativa en un mes), 185 `alias_sin_cliente` (los aliases cargados usan la fuente vieja; ver post-merge), 26 `identidad_en_revision`, 1 `fila_sin_interpretar` (la fila "General" de SleakOps tiene montos).
+- Los criterios 1 y 2 (lectura del worker sobre la planilla de prueba) están probados con el Google falso por el mismo camino del importer (`test_ventas_with_a_cliente_header...`, `test_a_new_read_replaces...`); falta verlos contra la planilla de prueba real.
+
+## Test plan
+
+1. `test_ventas_with_a_cliente_header_gives_one_accrual_per_client_row_and_month`: devengado por fila y mes, unidad de negocio y POD, sin "Total Ingresos", celda que lleva a `mcp.celdas`.
+2. `test_ventas_with_a_mes_header_and_a_general_block`: variante SleakOps.
+3. `test_a_repeated_client_is_a_second_series_to_be_reviewed`: sufijo " (2)" e `identidad_en_revision`.
+4. `test_unreadable_amounts_and_rows_with_amounts_and_no_client_are_problems`: `valor_ilegible` sin hecho; `fila_sin_interpretar` para fila sin cliente y fila de apertura con montos.
+5. `test_a_client_without_alias_shows_up_once_the_alias_is_loaded`: `alias_sin_cliente`; el alias con otra capitalización de la fuente resuelve el cliente sin reinterpretar.
+6. `test_rates_are_found_by_their_text`: filas corridas dos posiciones dan las mismas cotizaciones; oficial "tipo a confirmar".
+7. `test_a_control_mep_that_differs_from_the_operational_one_is_a_problem`.
+8. `test_interpret_twice_leaves_the_same_rows_and_problems`.
+9. `test_a_tab_without_interpreter_is_not_touched`.
+10. `test_a_new_read_replaces_the_accruals_of_the_previous_one` y `test_events_count_facts_and_time_and_nothing_carries_amounts`.
+
+Blast radius: toda importación pasa ahora por `interpret.run` dentro de su transacción (un error del intérprete frena la lectura de esa pestaña); `aliases load` normaliza la fuente (`test_clients` actualizado); el CHECK de `issue_type` se recrea.
+
+## Post-merge
+
+1. `craftech-os migrate` (aplica 0008 si falta y 0009).
+2. Recargar los aliases con la `fuente` en formato "Planilla / Pestaña" (por ejemplo "Facturación - Craftech Total / VENTAS"); los cargados con la fuente vieja no resuelven clientes.
+3. `craftech-os interpret --all` y revisar `alias_sin_cliente` y `cotizacion_discrepante`.
+

@@ -144,8 +144,18 @@ docker compose -f infra/docker-compose.yml run --rm -v ~/repos/craftech-os-data:
 ```
 
 - `clients load-zoho` carga las razones sociales de la Inc (`client_legal_entity` con sistema `zoho`). La clave es el tax ID; sin tax ID, la razón social normalizada. "Net N" es N días, "Due on Receipt" es 0 y cualquier otro plazo (vacío, "Custom") queda en 10. Una razón social nueva va al cliente con su Display Name, que se crea si no existe.
-- `aliases load` lee un CSV con las columnas `fuente`, `texto`, `cliente`, `decidió`, `motivo` (todas obligatorias; una fila incompleta frena la carga entera). El texto se guarda normalizado. El cliente se busca por nombre de fantasía o por razón social, normalizados, y se crea con ese nombre si no existe. Solo se agregan filas: la decisión más reciente de cada fuente y texto es la vigente (`mcp.aliases`).
+- `aliases load` lee un CSV con las columnas `fuente`, `texto`, `cliente`, `decidió`, `motivo` (todas obligatorias; una fila incompleta frena la carga entera). La `fuente` es la planilla y la pestaña donde aparece el texto, como "Planilla / Pestaña" (por ejemplo, "Facturación - Craftech Total / VENTAS"); fuente y texto se guardan normalizados, así que mayúsculas y espacios de más no cuentan. El cliente se busca por nombre de fantasía o por razón social, normalizados, y se crea con ese nombre si no existe. Solo se agregan filas: la decisión más reciente de cada fuente y texto es la vigente (`mcp.aliases`).
 - Las dos cargas se pueden repetir: una fila igual a lo ya guardado se saltea. Imprimen y registran en `system_event` (`clients_loaded`, `aliases_loaded`) solo cantidades: leídas, creadas, actualizadas, salteadas.
+
+## Devengados y cotizaciones
+
+Cada lectura nueva de una pestaña con intérprete reemplaza sus hechos, en la misma transacción que la guarda: `VENTAS` da un devengado por fila de cliente y mes (`accrual`, vista `mcp.devengados`) y `Pagos ARG` da las cotizaciones MEP y "Dólar oficial" por mes (`fx_rate`, vista `mcp.cotizaciones`). El cliente del devengado se resuelve por alias en la vista: cargar un alias no requiere reinterpretar. Para reinterpretar la última lectura sin leer de nuevo:
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm app craftech-os interpret --all   # o --tab <id>
+```
+
+Lo que no se puede interpretar abre un problema (`alias_sin_cliente`, `identidad_en_revision`, `fila_sin_interpretar`, `cotizacion_discrepante`, `cotizacion_tipo_a_confirmar`). Cada pestaña deja un evento `tab_interpreted` con cantidades y milisegundos, nunca montos.
 
 ## Web local
 
