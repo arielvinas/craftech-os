@@ -37,3 +37,6 @@
 - [ ] [test-gap] Sin test para una celda verde con "0" que después recibe un monto — QA T-011 r2 (plan/qa/T-011-round-2.md)
 - [ ] [performance] pagos.link carga el contenido completo de cada snapshot pintado solo para leer los meses del encabezado; crece con cada lectura — medir y, si hace falta, guardar el mes en cell_change — CodeRabbit PR #11
 - [ ] [correctness] Fórmula de Pagos ARG con LOG10(10): al quitar paréntesis queda LOG1010, se lee como referencia y da un USD inferido incorrecto (sin caída) — CodeRabbit autofix T-011 PR #11
+- [ ] [data-loss] Revisar filas de apertura de bloques en pagos.py y ventas.py por montos tipeados descartados — QA T-012 r1
+- [ ] [tests] Pagos: fila sin clave y monto ilegible dentro de un bloque de funding sin test (2 mutantes sobreviven) — QA T-012 r2
+- [ ] [regla] el único funding_duplicado real (FUNDINGS I4 vs Pagos K110) parece falso positivo; ¿acotar por fecha? pendiente Emi y Ro — QA T-012 r1/r2

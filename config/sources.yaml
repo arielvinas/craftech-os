@@ -70,6 +70,8 @@ sources:
         header: "Cliente"
         key: A
         blocks: ["General", "Funding de AWS confirmados", "Total Ingresos"]
+        # Below the header block: AWS fundings, milestones up to Feb 2026 (rule R28).
+        funding_blocks: ["General", "Funding de AWS confirmados"]
         grid: "D:AM"
       "Pagos ARG":
         header: "Mes"
@@ -128,6 +130,8 @@ sources:
         header: "Cliente"
         key: A
         blocks: ["Fundings de AWS", "General", "Total Ingresos"]
+        # "General" holds the CEI program, as in Craftech: pending ratification by Emi and Ro.
+        funding_blocks: ["Fundings de AWS", "General"]
         grid: "D:AM"
       "Pagos ARG":
         header: "Mes"
@@ -155,6 +159,20 @@ sources:
       "FUNDINGS":
         header: "EMPRESA"
         key: A
+        # Header text of each column the interpreter reads; columns move, texts stay.
+        # "Fecha Estimada De Cobro" is not read: the collection date is computed (rule R22).
+        columns:
+          program: "TIPO DE FUNDING"
+          status: "STATUS"
+          business_unit: "Unidad Comercial"
+          load_date: "Fecha De Carga En Fp"
+          estimated_signoff: "Fecha Estimada De Firmado De Sign-Off"
+          amount_usd: "MONTO A PEDIR"
+          opportunity: "OPP ID"
+          # Not in the sheet yet: while it is missing, milestones get a provisional key.
+          fund_claim_id: "Fund claim ID"
+          invoice_loaded: "Invoice cargada"
+          paid_on: "Fecha de pago"
 
   - title: "P&L Completo Craftech"
     drive_id: "163llheLfMbyf_2dcAD1eGRFBVYEvvhMM4eCE6oQnll4"

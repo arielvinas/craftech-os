@@ -1,4 +1,4 @@
-"""Reading a month grid: the month of a header cell and the number of a cell."""
+"""Reading a month grid: the month of a header cell, the date and the number of a cell."""
 
 from datetime import date, timedelta
 from decimal import Decimal
@@ -11,8 +11,8 @@ EPOCH = date(1899, 12, 30)
 MAX_SERIAL = (date.max - EPOCH).days
 
 
-def month(cell: dict | None) -> date | None:
-    """The first day of the month of a header cell holding a date, else None.
+def day(cell: dict | None) -> date | None:
+    """The date of a cell holding one, else None.
 
     A date is a number shown with a year; a plain number such as 2025 is not one.
     """
@@ -21,7 +21,13 @@ def month(cell: dict | None) -> date | None:
         return None
     if not 0 <= serial <= MAX_SERIAL:
         return None
-    return (EPOCH + timedelta(days=int(serial))).replace(day=1)
+    return EPOCH + timedelta(days=int(serial))
+
+
+def month(cell: dict | None) -> date | None:
+    """The first day of the month of a header cell holding a date, else None."""
+    found = day(cell)
+    return found and found.replace(day=1)
 
 
 def number(cell: dict) -> Decimal | None:

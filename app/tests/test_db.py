@@ -17,6 +17,7 @@ TABLES = [
     "client_legal_entity",
     "drive_activity",
     "editor_profile",
+    "funding_milestone",
     "fx_rate",
     "invoice",
     "issue",
@@ -42,6 +43,7 @@ MIGRATIONS = [
     "0008_clients.sql",
     "0009_accruals_fx.sql",
     "0010_invoices.sql",
+    "0011_fundings.sql",
 ]
 
 
