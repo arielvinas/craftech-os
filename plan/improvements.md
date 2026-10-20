@@ -40,3 +40,4 @@
 - [ ] [data-loss] Revisar filas de apertura de bloques en pagos.py y ventas.py por montos tipeados descartados — QA T-012 r1
 - [ ] [tests] Pagos: fila sin clave y monto ilegible dentro de un bloque de funding sin test (2 mutantes sobreviven) — QA T-012 r2
 - [ ] [regla] el único funding_duplicado real (FUNDINGS I4 vs Pagos K110) parece falso positivo; ¿acotar por fecha? pendiente Emi y Ro — QA T-012 r1/r2
+- [ ] [audit] Crear un cliente desde el servidor MCP (vincular_alias) queda auditado sin autor: la tabla client de T-009 no tiene columna de autor — QA T-013 r1 (F2, split-out)
