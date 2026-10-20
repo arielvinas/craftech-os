@@ -7,6 +7,8 @@ from craftech_os.diff.compare import blocks, column_index, value
 
 # Day zero of the Google Sheets date serials.
 EPOCH = date(1899, 12, 30)
+# Serial of 9999-12-31, the last day a date can hold.
+MAX_SERIAL = (date.max - EPOCH).days
 
 
 def month(cell: dict | None) -> date | None:
@@ -16,6 +18,8 @@ def month(cell: dict | None) -> date | None:
     """
     serial = ((cell or {}).get("value") or {}).get("numberValue")
     if serial is None or "yy" not in (cell.get("format") or "").lower():
+        return None
+    if not 0 <= serial <= MAX_SERIAL:
         return None
     return (EPOCH + timedelta(days=int(serial))).replace(day=1)
 

@@ -9,8 +9,7 @@ import time
 
 import psycopg
 
-from craftech_os import events
-from craftech_os.diff.compare import normalize
+from craftech_os import clients, events
 from craftech_os.interpret import pagos_arg, ventas
 from craftech_os.issues import detect
 
@@ -53,7 +52,7 @@ def run(conn: psycopg.Connection, snapshot_id: int) -> dict | None:
         return None
     facts, issues = interpret(doc, schema)
     source = f"{title} / {name}"
-    alias_source = normalize(source)
+    alias_source = clients.alias_source(source)
     for fact in facts.get("accrual", []):
         fact["alias_source"] = alias_source
     with conn.transaction():

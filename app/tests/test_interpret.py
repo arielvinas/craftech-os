@@ -14,6 +14,7 @@ from test_import import FakeGoogle, _tab
 
 from craftech_os import cli, interpret
 from craftech_os.diff.compare import BEFORE_HEADER
+from craftech_os.interpret import cells
 from craftech_os.migrate import migrate
 
 SOURCES = """
@@ -235,7 +236,7 @@ def test_a_client_without_alias_shows_up_once_the_alias_is_loaded(db, env, fake,
         csv.writer(f).writerows(
             [
                 ["fuente", "texto", "cliente", "decidio", "motivo"],
-                ["cobranzas ficticias / Ventas", "CLIENTE  Uno", "Ficticia Uno", "Ariel", "test"],
+                ["cobranzas ficticias/Ventas", "CLIENTE  Uno", "Ficticia Uno", "Ariel", "test"],
             ]
         )
     assert cli.main(["aliases", "load", str(path)]) == 0
@@ -434,3 +435,8 @@ def test_a_header_number_that_is_not_a_date_is_not_a_month(db, env, fake):
     assert ("Cliente:cliente uno:F", {"block": "Cliente", "cell_ref": "F3"}) in _issues(
         db, "fila_sin_interpretar"
     )
+
+
+@pytest.mark.parametrize("serial", [99999999, -99999999])
+def test_a_header_date_out_of_range_is_not_a_month(serial):
+    assert cells.month({"value": {"numberValue": serial}, "format": "mmmm yyyy"}) is None

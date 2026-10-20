@@ -99,7 +99,7 @@ Verificado en el repo el 19-oct-2026:
 
 ## Implementation
 
-- `app/migrations/0009_accruals_fx.sql`: tablas `accrual` y `fx_rate` (únicas por pestaña, bloque, clave y mes, y por tipo, mes y pestaña), los siete tipos de problema nuevos en el CHECK de `issue`, y las vistas `mcp.devengados` (cliente por el alias vigente de la fuente "planilla / pestaña") y `mcp.cotizaciones`, con comentarios y `GRANT` a `mcp_reader`.
+- `app/migrations/0009_accruals_fx.sql`: tablas `accrual` y `fx_rate` (únicas por pestaña, bloque, texto del alias, orden de la serie y mes, y por tipo, mes y pestaña), los siete tipos de problema nuevos en el CHECK de `issue`, y las vistas `mcp.devengados` (cliente por el alias vigente de la fuente "planilla / pestaña") y `mcp.cotizaciones`, con comentarios y `GRANT` a `mcp_reader`.
 - `app/craftech_os/interpret/`: `run(conn, snapshot_id)` borra e inserta los hechos de la pestaña en una transacción, abre los problemas y registra `tab_interpreted` (milisegundos y cantidades). `ventas.py` y `pagos_arg.py` son los intérpretes; `cells.py` lee meses y números de la grilla.
 - Enganche: `ingest/importer.py` llama a `interpret.run` después de `store.record`, dentro de la misma transacción; el worker pasa por ahí.
 - `craftech-os interpret --all | --tab <id>` reinterpreta la última lectura.
