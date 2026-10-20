@@ -7,6 +7,7 @@ lane: core
 depends_on: []
 effort: M
 milestone: B
+branch: arielvinas/t-015-cei-y-paridad-aws
 ---
 
 ## Context
