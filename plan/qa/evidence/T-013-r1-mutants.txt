@@ -1,0 +1,18 @@
+KILLED   :: problems not resolved
+KILLED   :: text not normalized
+KILLED   :: source not validated
+KILLED   :: client created without crear_cliente
+SURVIVED :: texto and cliente not required
+SURVIVED :: estado filter only abierto
+SURVIVED :: estado filter dropped
+KILLED   :: problem source filter dropped
+KILLED   :: facts glossary dropped
+KILLED   :: instructions sentence dropped
+KILLED   :: tool not registered
+KILLED   :: similar list empty
+KILLED   :: author not stored in resolution
+10/13 killed; survivors: ['texto and cliente not required', 'estado filter only abierto', 'estado filter dropped']
+KILLED   :: texto and cliente not required
+KILLED   :: estado filter only abierto
+KILLED   :: estado filter dropped
+3/3 killed; survivors: []

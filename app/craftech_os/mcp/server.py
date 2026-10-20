@@ -6,6 +6,7 @@ issue_resolution, annotation, editor_profile, client and client_alias; whether t
 exists is checked through the reader first. A new connection per call: the tools run in threads.
 """
 
+import difflib
 import os
 import re
 import sys
@@ -19,6 +20,9 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from psycopg.rows import dict_row
+
+from craftech_os.clients import alias_source
+from craftech_os.diff.compare import normalize
 
 SQL_ROW_LIMIT = 500
 GLOSSARY = Path(__file__).resolve().parents[3] / "docs" / "v0.9.md"
@@ -52,6 +56,54 @@ COLOR_RULES = (
     " del cliente, no una factura. Regla R26: una factura se identifica por fila del cliente + mes"
     " + razón social."
 )
+FACTS_GLOSSARY = """
+## Hechos de ingresos
+
+Lo que Craftech OS interpreta de las planillas, en las vistas del esquema mcp. Cada hecho trae
+planilla, pestaña, celda y lectura de origen, y el cliente ya resuelto por su alias.
+
+- **Devengado** (mcp.devengados): lo vendido a un cliente en un mes, una celda de cliente por
+  mes de la pestaña VENTAS. El monto está en dólares tal como lo escribió Ro: ya prorrateado por
+  los días del mes en que el servicio estuvo activo y neto de IVA.
+- **Factura** (mcp.facturas): una celda con monto de la grilla de meses de Pagos o Pagos ARG.
+  Su estado lo da el color de fondo: #00ffff (cian) a confirmar, #4a86e8 (azul) confirmada,
+  #ff9900 (naranja) enviada, #d9ead3 (verde) pagada, #ff00ff (magenta) retraso en el pago; un
+  monto sin color es a facturar, y un color que no está en esta lista es un problema
+  color_desconocido. Vaciar la celda significa que la factura deja de existir; un 0 con color o
+  una celda magenta sin monto cuentan igual que vaciarla. Una factura se identifica por la fila
+  del cliente, el mes y la razón social de Craftech que factura. En Pagos ARG el monto es bruto
+  en pesos y el neto es el bruto dividido 1,21. Sus cambios de color están en
+  mcp.cambios_de_estado_de_factura.
+- **Cobro** (mcp.cobros): el cambio que pintó de verde una celda de factura. Su fecha es el
+  momento de la edición si Drive la atribuye a un solo editor (certeza cierta); si no, el fin de
+  la ventana en que se detectó el cambio (certeza una_de); si la celda ya estaba verde al
+  importar, la fecha es desconocida (certeza sin_datos).
+- **Baja** (mcp.bajas): en SleakOps Pagos, una celda pintada sin monto marca que el cliente se
+  dio de baja; no es una factura. Qué color la marca está a confirmar hasta que Emi responda la
+  pregunta F-05.
+- **Hito de funding** (mcp.fundings): un pago de un programa de AWS. Hasta febrero de 2026 sale
+  del bloque AWS de Pagos y desde el 25 de febrero de 2026 del tracker FUNDINGS. Su clave es el
+  fund claim ID o, si falta, programa más orden (provisoria). El cobro estimado es la fecha de
+  sign-off más 30 días. Se lleva aparte de las facturas; el mismo funding en los dos lados se
+  conserva en ambos y abre un problema funding_duplicado.
+- **Cotización** (mcp.cotizaciones): pesos por dólar de un mes, de las filas de cotización de
+  Pagos ARG. Tipo mep (la fila MEP operativa) u oficial (la fila "Dólar oficial", cuyo tipo está
+  a confirmar hasta que Emi responda la pregunta F-01). Una factura en pesos usa la cotización
+  de la fila a la que apunta su fórmula; una cotización escrita a mano en la factura abre un
+  problema cotizacion_tipeada, y un MEP de control distinto del operativo abre
+  cotizacion_discrepante.
+- **Razón social** (mcp.razones_sociales): cada sociedad a la que se le factura a un cliente;
+  un cliente tiene una o más, con su identificación fiscal, el sistema donde se factura
+  (bejerman o zoho) y el plazo de pago (10 días si no se conoce).
+- **Alias** (mcp.aliases): el texto con que un cliente figura en una planilla y pestaña
+  (fuente), normalizado, y el cliente al que corresponde. Las decisiones se agregan, nunca se
+  borran: manda la última. Un texto sin alias abre un problema alias_sin_cliente y se resuelve
+  con vincular_alias.
+- **Paridad** (mcp.paridad_pagos, mcp.paridad_fundings): el control de que se leyó bien. En
+  Pagos compara la fila de total de la planilla con la suma de las facturas interpretadas; en
+  fundings, la fila "Pagos confirmados" con los hitos del tracker. Una diferencia distinta de 0
+  es un error de lectura que hay que revisar.
+"""
 WRITE_NOTE = (
     "Escribe en la base de Craftech OS (nunca en las planillas). autor y motivo son obligatorios:"
     " preguntale al usuario quién es y por qué antes de llamarla. Queda registrada con la"
@@ -82,7 +134,7 @@ def _required(**fields: str) -> None:
 
 
 def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
-    """The ten tools and two resources; without writer_url, only the seven that read."""
+    """The eleven tools and two resources; without writer_url, only the seven that read."""
 
     def rows(sql: str, params=()) -> list[dict]:
         with psycopg.connect(reader_url, row_factory=dict_row) as conn:
@@ -112,6 +164,9 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
             " problemas que encuentra al leerlas. El contenido actual de las planillas (cada celda"
             " de la última lectura) está en la vista mcp.celdas: se busca con consultar_sql,"
             " filtrando por planilla y pestaña, o por texto con texto ILIKE '%...%'."
+            " Los ingresos están en mcp.devengados, mcp.facturas, mcp.cobros, mcp.fundings y las"
+            " demás vistas de ingresos del catálogo, con el cliente ya resuelto; una fila sin"
+            " cliente se corrige con vincular_alias."
             f" {ORIGIN} {DATA_NOT_INSTRUCTIONS} El catálogo de"
             " vistas y columnas está en el recurso craftech://catalogo y el glosario en"
             " craftech://glosario."
@@ -319,7 +374,7 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
     def glosario() -> str:
         text = GLOSSARY.read_text()
         start = text.index("## 2. Glosario Craftech")
-        return text[start : text.index("\n## ", start)] + "\n"
+        return text[start : text.index("\n## ", start)] + FACTS_GLOSSARY
 
     if writer_url is None:
         return server
@@ -368,6 +423,82 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
         )
         return {"actor_id": actor_id, "nombre_persona": nombre_persona.strip()}
 
+    def clients_named(key: str) -> tuple[list[dict], list[dict]]:
+        clients = rows("SELECT id, nombre FROM mcp.clientes")
+        matches = [c for c in clients if normalize(c["nombre"]) == key]
+        if len(matches) > 1:
+            names = ", ".join(repr(c["nombre"]) for c in matches)
+            raise ToolError(f"El cliente es ambiguo: {names} se escriben igual.")
+        return matches, clients
+
+    def vincular_alias(
+        fuente: str,
+        texto: str,
+        cliente: str,
+        autor: str,
+        motivo: str,
+        crear_cliente: bool = False,
+    ) -> dict:
+        _required(fuente=fuente, texto=texto, cliente=cliente, autor=autor, motivo=motivo)
+        source, text, name, key = (
+            alias_source(fuente),
+            normalize(texto),
+            cliente.strip(),
+            normalize(cliente),
+        )
+        tabs = rows("SELECT planilla, pestaña FROM mcp.tabs")
+        if not any(alias_source(f"{t['planilla']} / {t['pestaña']}") == source for t in tabs):
+            raise ToolError(f"La fuente {fuente!r} no es «planilla / pestaña» de ninguna pestaña.")
+        matches, clients = clients_named(key)
+        created = not matches
+        if created and not crear_cliente:
+            similar = sorted(
+                c["nombre"]
+                for c in clients
+                if key in (k := normalize(c["nombre"]))
+                or k in key
+                or difflib.SequenceMatcher(None, key, k).ratio() >= 0.6
+            )
+            raise ToolError(
+                f"El cliente {name!r} no existe. Parecidos: {', '.join(similar) or 'ninguno'}."
+                " Para crearlo, volvé a llamar con crear_cliente = true."
+            )
+        if created:
+            # The writer cannot SELECT: the new id is read back through the reader.
+            insert("INSERT INTO client (name) VALUES (%s)", (name,))
+            matches, _ = clients_named(key)
+        client = matches[0]
+        problems = [
+            p["id"]
+            for p in rows(
+                "SELECT id, planilla, pestaña FROM mcp.issues WHERE tipo = 'alias_sin_cliente'"
+                " AND estado IN ('abierto', 'reabierto') AND detalle->>'text' = %s ORDER BY id",
+                (text,),
+            )
+            if alias_source(f"{p['planilla']} / {p['pestaña']}") == source
+        ]
+        with psycopg.connect(writer_url) as conn:
+            conn.execute(
+                "INSERT INTO client_alias (source, text, client_id, author, reason)"
+                " VALUES (%s, %s, %s, %s, %s)",
+                (source, text, client["id"], autor.strip(), motivo.strip()),
+            )
+            for problem in problems:
+                conn.execute(
+                    "INSERT INTO issue_resolution (issue_id, action, author, reason)"
+                    " VALUES (%s, 'resuelto', %s, %s)",
+                    (problem, autor.strip(), motivo.strip()),
+                )
+        return {
+            "fuente": source,
+            "texto": text,
+            "cliente_id": client["id"],
+            "cliente": client["nombre"],
+            "cliente_creado": created,
+            "problemas_resueltos": problems,
+            "autor": autor.strip(),
+        }
+
     server.add_tool(
         resolver_problema,
         annotations=write,
@@ -393,6 +524,19 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
             f' identificar #N". La última asociación manda. {WRITE_NOTE}'
         ),
     )
+    server.add_tool(
+        vincular_alias,
+        annotations=write,
+        description=(
+            "Vincula el texto con que un cliente figura en una planilla y pestaña (fuente, como"
+            " «planilla / pestaña») a un cliente por su nombre de fantasía: desde ahí los"
+            " devengados, facturas, bajas y fundings de esa fila muestran el cliente, y los"
+            " problemas alias_sin_cliente abiertos de ese texto y esa fuente quedan resueltos con"
+            " el mismo autor y motivo. El texto se normaliza como en la planilla (sin tildes ni"
+            " mayúsculas). Si el cliente no existe, devuelve los parecidos; con crear_cliente ="
+            f" true lo crea. Manda la última decisión. {WRITE_NOTE}"
+        ),
+    )
     return server
 
 
@@ -407,7 +551,7 @@ def main() -> None:
     if writer_url is None:
         print(
             "MCP_WRITER_DATABASE_URL is not set: starting without the write tools"
-            " (resolver_problema, anotar, asociar_editor)",
+            " (resolver_problema, anotar, asociar_editor, vincular_alias)",
             file=sys.stderr,
         )
     build_server(reader_url, writer_url).run("stdio")
