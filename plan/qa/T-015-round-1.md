@@ -9,7 +9,7 @@
 ## Cómo se verificó
 
 - **Base local** (`craftech-os-postgres-1`, con la migración `0012` ya aplicada desde la rama): consultas de `mcp.fundings`, `v_issue`, `issue_resolution` y `mcp.paridad_fundings_aws`.
-- **Antes y después contra la misma lectura.** Un worktree temporal de `main` y la rama corren `pagos.interpret` y `pagos.interpret_arg` sobre la última lectura de cada pestaña Pagos y Pagos ARG, y se comparan los hechos (script en `evidence/T-015-r1/compare.py`).
+- **Antes y después contra la misma lectura.** Un worktree temporal de `main` y la rama corren `pagos.interpret` y `pagos.interpret_arg` sobre la última lectura de cada pestaña Pagos y Pagos ARG, y se comparan los hechos (script en `evidence/T-015-r1/compare.py`). En la revisión de CodeRabbit el script se corrigió para que también lea Pagos ARG con `pagos.interpret_arg` (antes leía solo Pagos) y no escriba dentro del repo; vuelto a correr el 20-oct-2026, mismo resultado: los hechos de Pagos ARG son idénticos y los de Pagos difieren solo en la fila CEI y en `funding_total`, que es nuevo.
 - **Idempotencia sobre datos reales.** Tomé un hash de `mcp.fundings`, de `v_issue` (id, tipo, clave, estado, detalle) y de `mcp.paridad_fundings_aws`. Después corrí `uv run craftech-os interpret --all` dos veces y los tres hashes quedaron iguales.
 - **Navegador:** no aplica. El ticket no toca pantallas (las pantallas nuevas están fuera de alcance) y `test_web.py` pasa.
 

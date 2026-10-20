@@ -517,6 +517,15 @@ def test_a_missing_tracker_column_and_an_unreadable_amount_are_problems(db, env,
     ]
 
 
+def test_a_tracker_row_of_an_unknown_business_unit_is_kept_and_is_a_problem(db, env, fake):
+    _set(fake, 41, _edit(TRACKER, 1, 3, "Otra"), "file-f")
+    _import(env)
+    assert [r[-1] for r in _fundings(db, "tracker")] == ["H2", "H3", "H5", "H6"]
+    assert ("EMPRESA:cliente cinco:unidad", {"cell_ref": "D2"}) in _issues(
+        db, "fila_sin_interpretar"
+    )
+
+
 def test_parity_is_zero_with_consistent_data_and_shows_a_difference(db, env, fake):
     _import(env)
     assert _parity(db) == [

@@ -37,6 +37,8 @@ REQUIRED = (
     "invoice_loaded",
     "paid_on",
 )
+# Business units of the tracker: the parity views match each milestone to the sheet of its unit.
+UNITS = ("craftech", "sleakops")
 # Column of Pagos with the program of a funding row ("Generado por" in the header block).
 PROGRAM_C = 1
 
@@ -91,6 +93,13 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
             name = row["key"] or f"fila {row['r'] + 1}"
             issues.append(("fila_sin_interpretar", f"{block}:{name}", {"cell_ref": ref}))
             continue
+        business_unit = _text(cell("business_unit"))
+        if normalize(business_unit or "") not in UNITS:
+            # Kept, but no parity view adds it: a problem, not a silent gap.
+            unit_ref = a1(row["r"], at["business_unit"])
+            issues.append(
+                ("fila_sin_interpretar", f"{block}:{_row_key(row)}:unidad", {"cell_ref": unit_ref})
+            )
         program = _text(cell("program"))
         order[(row["key"], normalize(program or ""))] += 1
         signoff = day(cell("estimated_signoff"))
@@ -108,7 +117,7 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
                 "month": None,
                 "amount_usd": amount,
                 "status": _text(cell("status")),
-                "business_unit": _text(cell("business_unit")),
+                "business_unit": business_unit,
                 "load_date": load_date,
                 "estimated_signoff": signoff,
                 "estimated_collection": signoff and signoff + timedelta(days=COLLECTION_DAYS),
