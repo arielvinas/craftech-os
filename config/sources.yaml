@@ -130,7 +130,8 @@ sources:
         header: "Cliente"
         key: A
         blocks: ["Fundings de AWS", "General", "Total Ingresos"]
-        funding_blocks: ["Fundings de AWS"]
+        # "General" holds the CEI program, as in Craftech: pending ratification by Emi and Ro.
+        funding_blocks: ["Fundings de AWS", "General"]
         grid: "D:AM"
       "Pagos ARG":
         header: "Mes"

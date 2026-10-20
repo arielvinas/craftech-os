@@ -119,14 +119,15 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
 def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) -> tuple:
     """([milestone], [issue]) of the funding blocks of a Pagos tab, one per amount and month.
 
-    The row that opens a block, and amounts copied from another sheet, are not milestones.
+    Amounts copied from another sheet are not milestones. An amount typed in the row that opens
+    a block (the CEI program of "General") is not ratified as a milestone: it is a problem.
     """
     milestones, issues = [], []
     order = Counter()
     for block, rows in tab_blocks:
         if block.split(" (")[0] not in funding_blocks:
             continue
-        for row in rows[1:]:
+        for row in rows:
             program = _text(row["cells"].get(PROGRAM_C))
             for c in columns:
                 cell = row["cells"].get(c)
@@ -141,7 +142,9 @@ def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) 
                     continue
                 if not amount:
                     continue
-                if row["key"] is None or c not in months:
+                if c in months and months[c] > LAST_PAGOS_MONTH:
+                    continue
+                if row["key"] is None or c not in months or row is rows[0]:
                     name = row["key"] or f"fila {row['r'] + 1}"
                     where = f"{block}:{name}:{column_letters(c)}"
                     issues.append(
@@ -151,8 +154,6 @@ def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) 
                             {"block": block, "cell_ref": a1(row["r"], c)},
                         )
                     )
-                    continue
-                if months[c] > LAST_PAGOS_MONTH:
                     continue
                 order[(row["key"], normalize(program or ""))] += 1
                 milestones.append(

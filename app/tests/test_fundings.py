@@ -3,6 +3,7 @@
 Against the test database. Invented names and amounts only.
 """
 
+import csv
 import json
 from datetime import date
 from decimal import Decimal
@@ -397,6 +398,78 @@ def test_the_same_funding_on_both_sides_is_a_problem_and_both_rows_stay(db, env,
     assert both == [("pagos",), ("tracker",)]
 
 
+def test_an_amount_typed_in_the_row_that_opens_a_block_is_a_problem_not_lost(db, env, fake):
+    # The CEI program on the row of "General": not ratified as a milestone, so a problem.
+    opening = ["General", "CEI", "CEI", "8000", None, "9000"]
+    pagos = _edit(PAGOS, 3, 0, None)
+    pagos[3] = opening
+    # A client row copying its amount from another sheet gives nothing.
+    pagos = _edit(pagos, 5, 3, _formula(1234, "='Otra planilla'!D5"))
+    _set(fake, 11, pagos)
+    _import(env)
+    cells = [row[-1] for row in _fundings(db, "pagos") if row[0] == "Facturación Ficticia"]
+    assert cells == ["D5", "E6", "E8"]
+    opened = [(k, d) for k, d in _issues(db, "fila_sin_interpretar") if k.startswith("General")]
+    # March 2026 (F4) is after the cut: the tracker holds it.
+    assert opened == [("General:general:D", {"block": "General", "cell_ref": "D4"})]
+
+
+def test_a_duplicate_needs_the_same_amount_and_client_and_aliases_join_texts(
+    db, env, fake, tmp_path
+):
+    def row(name, loaded, amount):
+        return [name, "MAP", "Cargado en FP", "Craftech", _date(loaded), None, None, amount]
+
+    _set(
+        fake,
+        41,
+        [
+            TRACKER_HEADER,
+            # Same text as Cliente Uno of Pagos, another amount: not the same funding.
+            row("Cliente Uno", date(2026, 3, 1), "1234"),
+            # Another text, the amount of Cliente Uno in Pagos (D5).
+            row("Uno Alias", date(2026, 3, 2), "5000"),
+            # Loaded before the cut, after 1 February: Pagos has it (rule R28).
+            row("Cliente Siete", date(2026, 2, 24), "777"),
+        ],
+        "file-f",
+    )
+    _import(env)
+    assert [r[-1] for r in _fundings(db, "tracker")] == ["H2", "H3"]
+    assert _issues(db, "funding_duplicado") == []
+    aliases = tmp_path / "aliases.csv"
+    with aliases.open("w", encoding="utf-8", newline="") as f:
+        csv.writer(f).writerows(
+            [
+                ["fuente", "texto", "cliente", "decidió", "motivo"],
+                ["Facturación Ficticia / Pagos", "Cliente Uno", "Uno SA", "Ariel", "prueba"],
+                ["Fundings Ficticios / FUNDINGS", "Uno Alias", "Uno SA", "Ariel", "prueba"],
+            ]
+        )
+    assert cli.main(["aliases", "load", str(aliases)]) == 0
+    assert cli.main(["interpret", "--all"]) == 0
+    ((key, details),) = _issues(db, "funding_duplicado")
+    assert key.startswith("uno alias|")
+    assert (details["tracker"]["cell_ref"], details["pagos"]["cell_ref"]) == ("H3", "D5")
+
+
+def test_a_missing_tracker_column_and_an_unreadable_amount_are_problems(db, env, fake):
+    header = [h if h != "MONTO A PEDIR" else "Monto" for h in TRACKER_HEADER]
+    _set(fake, 41, [header, *TRACKER[1:]], "file-f")
+    _import(env)
+    assert _fundings(db, "tracker") == []
+    assert _issues(db, "fila_sin_interpretar")[-1] == (
+        "falta:MONTO A PEDIR",
+        {"column": "MONTO A PEDIR"},
+    )
+    _set(fake, 41, _edit(TRACKER, 1, 7, "a definir"), "file-f")
+    _import(env)
+    assert [r[-1] for r in _fundings(db, "tracker")] == ["H3", "H5", "H6"]
+    assert _issues(db, "valor_ilegible") == [
+        ("EMPRESA:cliente cinco:MONTO A PEDIR", {"cell_ref": "H2"})
+    ]
+
+
 def test_parity_is_zero_with_consistent_data_and_shows_a_difference(db, env, fake):
     _import(env)
     assert _parity(db) == [
@@ -449,7 +522,7 @@ def test_the_real_config_has_the_fundings_schema():
     schema = parsed["FUNDINGS - Log de status [OFICIAL]"]["schemas"]["FUNDINGS"]
     assert schema["columns"]["amount_usd"] == "MONTO A PEDIR"
     pagos = parsed["Facturación - SleakOps Total"]["schemas"]["Pagos"]
-    assert pagos["funding_blocks"] == ["Fundings de AWS"]
+    assert pagos["funding_blocks"] == ["Fundings de AWS", "General"]
 
 
 @pytest.mark.parametrize(
