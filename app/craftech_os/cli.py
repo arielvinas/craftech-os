@@ -250,7 +250,8 @@ def cmd_interpret(args) -> None:
             print(
                 f"{title} / {name}: {counts['accrual']} accruals, {counts['fx_rate']} fx rates,"
                 f" {counts['invoice']} invoices, {counts['payment']} payments,"
-                f" {counts['client_churn']} churn, {counts['issues']} issues,"
+                f" {counts['client_churn']} churn, {counts['funding_milestone']} fundings,"
+                f" {counts['issues']} issues,"
                 f" {counts['duration_ms']} ms"
             )
     print(f"{done} tabs interpreted")

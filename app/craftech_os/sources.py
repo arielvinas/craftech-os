@@ -6,7 +6,7 @@ import psycopg
 import yaml
 
 from craftech_os.diff.compare import column_index
-from craftech_os.interpret import INTERPRETERS
+from craftech_os.interpret import INTERPRETERS, fundings
 
 CLASSES = ("CARGA", "DERIVADA", "HISTORICA", "IGNORAR", "A_CONFIRMAR", "SIN_CLASIFICAR")
 SOURCES_FILE = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
@@ -30,10 +30,13 @@ def _class(value, what: str) -> str:
 
 
 def _schema(value, what: str) -> dict:
-    """A tab schema: header text, key column, block openers and the month grid columns."""
+    """A tab schema: header text, key column, block openers and the month grid columns.
+
+    Pagos also names its funding blocks; the FUNDINGS tracker maps roles to header texts.
+    """
     if not isinstance(value, dict) or not {"header", "key"} <= set(value):
         raise SourcesError(f"{what}: a schema needs 'header' and 'key'")
-    unknown = set(value) - {"header", "key", "blocks", "grid"}
+    unknown = set(value) - {"header", "key", "blocks", "grid", "funding_blocks", "columns"}
     if unknown:
         raise SourcesError(f"{what}: unknown schema keys {sorted(unknown)}")
     _name(value["header"], f"{what} header")
@@ -50,6 +53,17 @@ def _schema(value, what: str) -> dict:
         raise SourcesError(f"{what}: blocks must be a list of texts")
     for block in blocks:
         _name(block, f"{what} block")
+    if not set(value.get("funding_blocks", [])) <= set(blocks):
+        raise SourcesError(f"{what}: funding_blocks must be among the blocks")
+    if "columns" in value:
+        columns = value["columns"]
+        if not isinstance(columns, dict):
+            raise SourcesError(f"{what}: columns must map roles to header texts")
+        for role, text in columns.items():
+            _name(text, f"{what} column {role!r}")
+        missing = sorted(set(fundings.REQUIRED) - set(columns))
+        if missing:
+            raise SourcesError(f"{what}: columns needs {missing}")
     return value
 
 
@@ -141,9 +155,11 @@ def parse(text: str) -> list[dict]:
                 raise SourcesError(f"{title!r}: schema for {name!r}, a tab not listed in 'tabs'")
             _schema(schema, f"{title!r} schema of {name!r}")
         for name, cls in tabs:
-            if cls == "CARGA" and name in INTERPRETERS and "grid" not in schemas.get(name, {}):
+            schema = schemas.get(name, {})
+            if cls == "CARGA" and name in INTERPRETERS and not {"grid", "columns"} & set(schema):
                 raise SourcesError(
-                    f"{title!r}: {name!r} is interpreted and needs a schema with 'grid'"
+                    f"{title!r}: {name!r} is interpreted"
+                    " and needs a schema with 'grid' or 'columns'"
                 )
         result.append(
             {

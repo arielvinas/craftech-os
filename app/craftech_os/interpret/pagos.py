@@ -1,8 +1,9 @@
 """Invoices of a Pagos or Pagos ARG tab: one per amount cell of the header block, in the state
 its color says (rule R29); churn of SleakOps; and the total row of the tab to check them against.
 
-Only the block of the header holds invoices: the funding blocks belong to T-012. Payments are
-linked afterwards to the cell change that painted the invoice green (link), never copied.
+Only the block of the header holds invoices; the funding blocks the schema names give funding
+milestones instead (fundings.from_pagos), never invoices (rule R15). Payments are linked
+afterwards to the cell change that painted the invoice green (link), never copied.
 Problems carry blocks, row keys and cell references, never amounts.
 """
 
@@ -13,7 +14,7 @@ from decimal import Decimal, InvalidOperation
 import psycopg
 
 from craftech_os.diff.compare import a1, column_index, column_letters, normalize
-from craftech_os.interpret import pagos_arg
+from craftech_os.interpret import fundings, pagos_arg
 from craftech_os.interpret.cells import grid, number, unreadable
 from craftech_os.issues import detect
 
@@ -53,7 +54,7 @@ def interpret_arg(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple
 def _interpret(doc: dict, schema: dict, legal_entity: str, total_key: str, churn: bool):
     found = grid(doc, schema)
     if found is None:
-        return {"invoice": [], "client_churn": [], "payment_total": []}, [
+        return {"invoice": [], "client_churn": [], "payment_total": [], "funding_milestone": []}, [
             ("fila_sin_interpretar", "sin encabezado", {})
         ]
     tab_blocks, header, columns, months = found
@@ -148,7 +149,16 @@ def _interpret(doc: dict, schema: dict, legal_entity: str, total_key: str, churn
                         "cell_ref": a1(total["r"], c),
                     }
                 )
-    return {"invoice": invoices, "client_churn": churned, "payment_total": totals}, issues
+    milestones, funding_issues = fundings.from_pagos(
+        tab_blocks, header, columns, months, schema.get("funding_blocks", [])
+    )
+    facts = {
+        "invoice": invoices,
+        "client_churn": churned,
+        "payment_total": totals,
+        "funding_milestone": milestones,
+    }
+    return facts, issues + funding_issues
 
 
 def _rate(cell: dict, by_r: dict, block: str, row: dict, header: dict, c: int, issues: list):
