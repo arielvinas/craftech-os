@@ -120,7 +120,7 @@ Verificado en el repo el 19-oct-2026:
 - Revisión de CodeRabbit (PR #10):
   - La fuente de un alias se escribe con un espacio a cada lado de "/" en los dos lados (`clients.alias_source`), así "Planilla/VENTAS" en el CSV coincide con la pestaña.
   - Un número del encabezado fuera del rango de fechas no es mes (antes tiraba `OverflowError` y frenaba el worker); cerrado en `plan/improvements.md`.
-  - `sources.yaml` rechaza un esquema de VENTAS o Pagos ARG sin `grid`.
+  - `sources.yaml` rechaza una pestaña VENTAS o Pagos ARG de clase CARGA sin esquema o con un esquema sin `grid` (de otra clase no se interpreta y no lo necesita). El intérprete sigue sin tocar una pestaña sin esquema si la base quedó así.
   - `mcp.devengados` y `mcp.cotizaciones` muestran solo los hechos de la última lectura de cada pestaña (como `mcp.celdas`): si la lectura nueva no se interpreta (pestaña reclasificada o sin esquema), los hechos viejos no aparecen como vigentes. La 0009 cambió otra vez: en la base local principal se reemplazaron las dos vistas a mano y se actualizó su `sha256`; `migrate` dice "nothing to apply".
 
 ## Test plan
@@ -137,7 +137,7 @@ Verificado en el repo el 19-oct-2026:
 10. `test_a_new_read_replaces_the_accruals_of_the_previous_one` y `test_events_count_facts_and_time_and_nothing_carries_amounts`.
 
 11. Ronda 1: `test_a_repeated_month_column_is_a_problem_and_the_read_goes_on`, `test_a_row_whose_text_ends_like_a_series_suffix_is_its_own_row`, `test_an_error_in_a_grid_cell_is_unreadable`, `test_a_ventas_tab_without_schema_or_not_carga_is_not_touched`, `test_a_header_number_that_is_not_a_date_is_not_a_month`.
-12. Revisión de CodeRabbit: `test_a_header_date_out_of_range_is_not_a_month`, `test_an_interpreted_tab_without_grid_is_rejected`, `test_facts_of_an_older_reading_are_hidden_once_a_newer_one_is_not_interpreted`, y el alias de `test_a_client_without_alias_shows_up_once_the_alias_is_loaded` escrito "planilla/pestaña" sin espacios.
+12. Revisión de CodeRabbit: `test_a_header_date_out_of_range_is_not_a_month`, `test_an_interpreted_carga_tab_without_schema_or_grid_is_rejected`, `test_facts_of_an_older_reading_are_hidden_once_a_newer_one_is_not_interpreted`, y el alias de `test_a_client_without_alias_shows_up_once_the_alias_is_loaded` escrito "planilla/pestaña" sin espacios.
 
 Blast radius: toda importación pasa ahora por `interpret.run` dentro de su transacción (un error del intérprete frena la lectura de esa pestaña); `aliases load` normaliza la fuente (`test_clients` actualizado); el CHECK de `issue_type` se recrea.
 

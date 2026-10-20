@@ -442,9 +442,14 @@ def test_a_header_date_out_of_range_is_not_a_month(serial):
     assert cells.month({"value": {"numberValue": serial}, "format": "mmmm yyyy"}) is None
 
 
-def test_an_interpreted_tab_without_grid_is_rejected():
-    with pytest.raises(sources.SourcesError, match="needs 'grid'"):
+def test_an_interpreted_carga_tab_without_schema_or_grid_is_rejected():
+    with pytest.raises(sources.SourcesError, match="needs a schema with 'grid'"):
         sources.parse(SOURCES.replace('        grid: "D:F"\n', ""))
+    without_schema = SOURCES.split('    schemas:\n      "VENTAS":\n        header: "Mes"')[0]
+    with pytest.raises(sources.SourcesError, match="'VENTAS' is interpreted"):
+        sources.parse(without_schema)
+    historic = SOURCES.replace('CARGA: ["VENTAS"]', 'HISTORICA: ["VENTAS"]')
+    assert sources.parse(historic.split('    schemas:\n      "VENTAS":\n        header: "Mes"')[0])
 
 
 def test_facts_of_an_older_reading_are_hidden_once_a_newer_one_is_not_interpreted(db, env, fake):

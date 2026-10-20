@@ -140,8 +140,11 @@ def parse(text: str) -> list[dict]:
             if name not in seen:
                 raise SourcesError(f"{title!r}: schema for {name!r}, a tab not listed in 'tabs'")
             _schema(schema, f"{title!r} schema of {name!r}")
-            if name in INTERPRETERS and "grid" not in schema:
-                raise SourcesError(f"{title!r} schema of {name!r}: an interpreted tab needs 'grid'")
+        for name, cls in tabs:
+            if cls == "CARGA" and name in INTERPRETERS and "grid" not in schemas.get(name, {}):
+                raise SourcesError(
+                    f"{title!r}: {name!r} is interpreted and needs a schema with 'grid'"
+                )
         result.append(
             {
                 "title": title,
