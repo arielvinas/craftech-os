@@ -1,5 +1,6 @@
 """Funding milestones (rule R28): from the AWS blocks of Pagos up to February 2026, and from the
-FUNDINGS tracker for what was loaded from 25 February 2026.
+FUNDINGS tracker for what was loaded from 25 February 2026. The CEI program comes from Pagos up
+to September 2026.
 
 Both origins are kept: a funding on both sides is reported as funding_duplicado, never merged.
 Until the tracker has a fund claim ID column, a milestone is known by its program and its
@@ -18,6 +19,10 @@ from craftech_os.issues import detect
 # Rule R28: Pagos holds the milestones up to 24/2/2026, the tracker the ones loaded since.
 CUT = date(2026, 2, 25)
 LAST_PAGOS_MONTH = date(2026, 2, 1)
+# The CEI program, paid at the end of each quarter, had its last payment in September 2026:
+# Ariel's declaration of 20-oct-2026, pending ratification by Emi and Ro. The tracker does not
+# hold it, so Pagos is its source after the cut too.
+CEI_LAST_MONTH = date(2026, 9, 1)
 # Rule R22: the collection is expected 30 days after the sign-off.
 COLLECTION_DAYS = 30
 # Roles the tracker schema must map to a header text; fund_claim_id is optional.
@@ -120,7 +125,8 @@ def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) 
     """([milestone], [issue]) of the funding blocks of a Pagos tab, one per amount and month.
 
     Amounts copied from another sheet are not milestones. An amount typed in the row that opens
-    a block (the CEI program of "General") is not ratified as a milestone: it is a problem.
+    a block is a problem, except in the CEI row of "General": a program, not a client, whose
+    amounts (copies included) are milestones up to its end, also after the cut of rule R28.
     """
     milestones, issues = [], []
     order = Counter()
@@ -129,12 +135,14 @@ def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) 
             continue
         for row in rows:
             program = _text(row["cells"].get(PROGRAM_C))
+            cei = row is rows[0] and block.split(" (")[0] == "General"
+            cei = cei and normalize(program or "") == "cei"
             for c in columns:
                 cell = row["cells"].get(c)
                 if cell is None:
                     continue
                 formula = (cell.get("formula") or "").upper()
-                if "!" in formula or "IMPORTRANGE" in formula:
+                if not cei and ("!" in formula or "IMPORTRANGE" in formula):
                     continue
                 amount = number(cell)
                 if amount is None and unreadable(cell):
@@ -142,18 +150,17 @@ def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) 
                     continue
                 if not amount:
                     continue
-                if c in months and months[c] > LAST_PAGOS_MONTH:
+                if not cei and c in months and months[c] > LAST_PAGOS_MONTH:
                     continue
-                if row["key"] is None or c not in months or row is rows[0]:
-                    name = row["key"] or f"fila {row['r'] + 1}"
-                    where = f"{block}:{name}:{column_letters(c)}"
-                    issues.append(
-                        (
-                            "fila_sin_interpretar",
-                            where,
-                            {"block": block, "cell_ref": a1(row["r"], c)},
-                        )
-                    )
+                name = row["key"] or f"fila {row['r'] + 1}"
+                where = f"{block}:{name}:{column_letters(c)}"
+                details = {"block": block, "cell_ref": a1(row["r"], c)}
+                if cei and c in months and months[c] > CEI_LAST_MONTH:
+                    details["reason"] = "el programa CEI terminó en septiembre de 2026"
+                    issues.append(("fila_sin_interpretar", where, details))
+                    continue
+                if row["key"] is None or c not in months or (row is rows[0] and not cei):
+                    issues.append(("fila_sin_interpretar", where, details))
                     continue
                 order[(row["key"], normalize(program or ""))] += 1
                 milestones.append(
@@ -176,6 +183,7 @@ def from_pagos(tab_blocks, header: dict, columns, months: dict, funding_blocks) 
                         "invoice_loaded": None,
                         "paid_on": None,
                         "alias_text": row["key"],
+                        "program_row": cei,
                         "cell_ref": a1(row["r"], c),
                     }
                 )

@@ -18,6 +18,7 @@ TABLES = [
     "drive_activity",
     "editor_profile",
     "funding_milestone",
+    "funding_total",
     "fx_rate",
     "invoice",
     "issue",
@@ -44,6 +45,7 @@ MIGRATIONS = [
     "0009_accruals_fx.sql",
     "0010_invoices.sql",
     "0011_fundings.sql",
+    "0012_cei_aws_parity.sql",
 ]
 
 

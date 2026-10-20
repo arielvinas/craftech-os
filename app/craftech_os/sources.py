@@ -32,11 +32,20 @@ def _class(value, what: str) -> str:
 def _schema(value, what: str) -> dict:
     """A tab schema: header text, key column, block openers and the month grid columns.
 
-    Pagos also names its funding blocks; the FUNDINGS tracker maps roles to header texts.
+    Pagos also names its funding blocks and the row that totals them; the FUNDINGS tracker maps
+    roles to header texts.
     """
     if not isinstance(value, dict) or not {"header", "key"} <= set(value):
         raise SourcesError(f"{what}: a schema needs 'header' and 'key'")
-    unknown = set(value) - {"header", "key", "blocks", "grid", "funding_blocks", "columns"}
+    unknown = set(value) - {
+        "header",
+        "key",
+        "blocks",
+        "grid",
+        "funding_blocks",
+        "funding_total",
+        "columns",
+    }
     if unknown:
         raise SourcesError(f"{what}: unknown schema keys {sorted(unknown)}")
     _name(value["header"], f"{what} header")
@@ -55,6 +64,8 @@ def _schema(value, what: str) -> dict:
         _name(block, f"{what} block")
     if not set(value.get("funding_blocks", [])) <= set(blocks):
         raise SourcesError(f"{what}: funding_blocks must be among the blocks")
+    if "funding_total" in value:
+        _name(value["funding_total"], f"{what} funding_total")
     if "columns" in value:
         columns = value["columns"]
         if not isinstance(columns, dict):
