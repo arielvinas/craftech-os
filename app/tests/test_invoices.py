@@ -467,7 +467,14 @@ def test_an_amount_typed_into_a_green_cell_is_the_payment_change(db, env, fake):
     )
 
 
-@pytest.mark.parametrize("formula", ["=ROUND(50*1.21*B7)", "=50*1.21*B7+0"])
+@pytest.mark.parametrize(
+    "formula",
+    [
+        "=ROUND(50*1.21*B7)",
+        "=50*1.21*B7+0",
+        "=50*1.21*B7*ATAN2(1,1)/ATAN2(1,1)",
+    ],
+)
 def test_an_arg_formula_that_is_not_a_plain_product_still_reads_its_rate(db, env, fake, formula):
     _set(fake, 12, _edit(PAGOS_ARG, 3, 1, _formula(54450, formula)))
     _import(env)
@@ -476,6 +483,16 @@ def test_an_arg_formula_that_is_not_a_plain_product_still_reads_its_rate(db, env
         " AND celda = 'B4'"
     ).fetchall()
     assert row == (Decimal("900"), None)
+
+
+def test_an_arg_formula_whose_only_match_is_a_function_name_does_not_stop_the_read(db, env, fake):
+    _set(fake, 12, _edit(PAGOS_ARG, 3, 1, _formula(54450, "=54450+0*ATAN2(1,1)")))
+    _import(env)
+    (row,) = db.execute(
+        "SELECT cotizacion, usd_inferido FROM mcp.facturas WHERE pestaña = 'Pagos ARG'"
+        " AND celda = 'B4'"
+    ).fetchall()
+    assert row == (None, None)
 
 
 def test_an_arg_formula_with_two_references_opens_a_problem(db, env, fake):

@@ -30,7 +30,8 @@ STATES = {
 assert set(STATES) == detect.KNOWN_COLORS
 PAID, SENT = "#d9ead3", "#ff9900"
 IVA = Decimal("1.21")
-REFERENCE = re.compile(r"\$?\b([A-Z]+)\$?(\d+)\b")
+# An A1 reference, not a function name such as ATAN2 or LOG10.
+REFERENCE = re.compile(r"(?<![\w.$])\$?([A-Z]{1,3})\$?(\d+)(?![\w(])")
 
 
 def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str, str, dict]]]:
