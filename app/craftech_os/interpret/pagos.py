@@ -1,5 +1,6 @@
 """Invoices of a Pagos or Pagos ARG tab: one per amount cell of the header block, in the state
-its color says (rule R29); churn of SleakOps; and the total row of the tab to check them against.
+its color says (rule R29); churn of SleakOps; and the total rows of the tab to check the invoices
+and the fundings against.
 
 Only the block of the header holds invoices; the funding blocks the schema names give funding
 milestones instead (fundings.from_pagos), never invoices (rule R15). Payments are linked
@@ -36,7 +37,7 @@ REFERENCE = re.compile(r"(?<![\w.$])\$?([A-Z]{1,3})\$?(\d+)(?![\w(])")
 
 
 def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str, str, dict]]]:
-    """Pagos: ({"invoice", "client_churn", "payment_total": [fact]}, [(issue_type, key, details)]).
+    """Pagos: ({"invoice", "client_churn", "payment_total", "funding_total": [fact]}, [issues]).
 
     In SleakOps a painted cell without amount is a churn (rule R31).
     """
@@ -54,9 +55,8 @@ def interpret_arg(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple
 def _interpret(doc: dict, schema: dict, legal_entity: str, total_key: str, churn: bool):
     found = grid(doc, schema)
     if found is None:
-        return {"invoice": [], "client_churn": [], "payment_total": [], "funding_milestone": []}, [
-            ("fila_sin_interpretar", "sin encabezado", {})
-        ]
+        empty = ("invoice", "client_churn", "payment_total", "funding_total", "funding_milestone")
+        return {fact: [] for fact in empty}, [("fila_sin_interpretar", "sin encabezado", {})]
     tab_blocks, header, columns, months = found
     by_r = {row["r"]: row for _, rows in tab_blocks for row in rows}
     ars = legal_entity == "Craftech S.A."
@@ -134,16 +134,21 @@ def _interpret(doc: dict, schema: dict, legal_entity: str, total_key: str, churn
         for key, n in sorted(with_amounts.items())
         if n > 1
     ]
-    totals = []
-    total = next((by_r[r] for r in sorted(by_r) if by_r[r]["key"] == total_key), None)
-    if total is None:
-        issues.append(("fila_sin_interpretar", f"falta:{total_key}", {"row": total_key}))
-    else:
+    # The total of the invoices, and the one of the fundings when the schema names its row.
+    totals = {"payment_total": [], "funding_total": []}
+    for fact, key in (("payment_total", total_key), ("funding_total", schema.get("funding_total"))):
+        if key is None:
+            continue
+        key = normalize(key)
+        total = next((by_r[r] for r in sorted(by_r) if by_r[r]["key"] == key), None)
+        if total is None:
+            issues.append(("fila_sin_interpretar", f"falta:{key}", {"row": key}))
+            continue
         for c, month in months.items():
             if (amount := number(total["cells"].get(c) or {})) is not None:
-                totals.append(
+                totals[fact].append(
                     {
-                        "row_key": total_key,
+                        "row_key": key,
                         "month": month,
                         "amount": amount,
                         "cell_ref": a1(total["r"], c),
@@ -155,7 +160,7 @@ def _interpret(doc: dict, schema: dict, legal_entity: str, total_key: str, churn
     facts = {
         "invoice": invoices,
         "client_churn": churned,
-        "payment_total": totals,
+        **totals,
         "funding_milestone": milestones,
     }
     return facts, issues + funding_issues

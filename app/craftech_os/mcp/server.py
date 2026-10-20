@@ -86,6 +86,11 @@ planilla, pestaña, celda y lectura de origen, y el cliente ya resuelto por su a
   fund claim ID o, si falta, programa más orden (provisoria). El cobro estimado es la fecha de
   sign-off más 30 días. Se lleva aparte de las facturas; el mismo funding en los dos lados se
   conserva en ambos y abre un problema funding_duplicado.
+- **CEI** (programa CEI en mcp.fundings): un programa de AWS que se cobra a fin de cada
+  trimestre, sin cliente. Está en la fila CEI del bloque "General" de Pagos, no en el tracker:
+  sus montos son hitos de funding hasta septiembre de 2026, cuando terminó el programa; un monto
+  posterior abre un problema fila_sin_interpretar. Declaración de Ariel del 20-oct-2026,
+  pendiente de ratificar por Emi y Ro.
 - **Cotización** (mcp.cotizaciones): pesos por dólar de un mes, de las filas de cotización de
   Pagos ARG. Tipo mep (la fila MEP operativa) u oficial (la fila "Dólar oficial", cuyo tipo está
   a confirmar hasta que Emi responda la pregunta F-01). Una factura en pesos usa la cotización
@@ -99,10 +104,12 @@ planilla, pestaña, celda y lectura de origen, y el cliente ya resuelto por su a
   (fuente), normalizado, y el cliente al que corresponde. Las decisiones se agregan, nunca se
   borran: manda la última. Un texto sin alias abre un problema alias_sin_cliente y se resuelve
   con vincular_alias.
-- **Paridad** (mcp.paridad_pagos, mcp.paridad_fundings): el control de que se leyó bien. En
-  Pagos compara la fila de total de la planilla con la suma de las facturas interpretadas; en
-  fundings, la fila "Pagos confirmados" con los hitos del tracker. Una diferencia distinta de 0
-  es un error de lectura que hay que revisar.
+- **Paridad** (mcp.paridad_pagos, mcp.paridad_fundings, mcp.paridad_fundings_aws): el control
+  de que se leyó bien. En Pagos compara la fila de total de la planilla con la suma de las
+  facturas interpretadas; en fundings, la fila "Pagos confirmados" con los hitos del tracker; y
+  la fila "TOTAL PAGOS AWS" de Pagos con todos los hitos de funding de esa planilla (Pagos hasta
+  febrero de 2026, después CEI más el tracker por mes de pago o de cobro estimado). Una
+  diferencia distinta de 0 es un error de lectura que hay que revisar.
 """
 WRITE_NOTE = (
     "Escribe en la base de Craftech OS (nunca en las planillas). autor y motivo son obligatorios:"

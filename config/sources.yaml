@@ -72,6 +72,8 @@ sources:
         blocks: ["General", "Funding de AWS confirmados", "Total Ingresos"]
         # Below the header block: AWS fundings, milestones up to Feb 2026 (rule R28).
         funding_blocks: ["General", "Funding de AWS confirmados"]
+        # The row that adds the fundings, checked in mcp.paridad_fundings_aws.
+        funding_total: "TOTAL PAGOS AWS"
         grid: "D:AM"
       "Pagos ARG":
         header: "Mes"
@@ -132,6 +134,7 @@ sources:
         blocks: ["Fundings de AWS", "General", "Total Ingresos"]
         # "General" holds the CEI program, as in Craftech: pending ratification by Emi and Ro.
         funding_blocks: ["Fundings de AWS", "General"]
+        funding_total: "TOTAL PAGOS AWS"
         grid: "D:AM"
       "Pagos ARG":
         header: "Mes"

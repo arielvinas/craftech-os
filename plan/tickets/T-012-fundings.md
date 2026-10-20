@@ -96,7 +96,11 @@ Cada celda con monto de esas filas, en una columna de mes hasta febrero de 2026,
 - los montos traídos de otra planilla (fórmulas con `!` o `IMPORTRANGE`);
 - los meses desde marzo de 2026.
 
-**Fila que abre un bloque de funding (ronda 1 de QA).** En "General" esa fila trae montos tipeados del programa CEI ("General | CEI | CEI"): en Craftech las celdas E96, H96, K96 y N96 (meses de 2025); en SleakOps las celdas E102, H102 y K102 (meses de 2025). Que sean hitos del programa CEI es una regla financiera no ratificada, así que **no se interpretan como hito, pero tampoco se descartan**: cada monto tipeado de esa fila, en un mes hasta febrero de 2026, abre `fila_sin_interpretar` con clave bloque + clave de la fila + columna (por ejemplo `General:general:E`) y la celda. Las copias de otra planilla y los meses desde marzo de 2026 siguen sin dar nada, igual que en las filas de cliente. Verificado en la base local el 20-oct-2026: se abren los siete problemas, y los hitos siguen siendo 91 en Craftech y 10 en SleakOps.
+La fila CEI de "General" es la excepción desde T-015 (ver el párrafo siguiente).
+
+**Fila que abre un bloque de funding (ronda 1 de QA).** En "General" esa fila trae montos tipeados del programa CEI ("General | CEI | CEI"): en Craftech las celdas E96, H96, K96 y N96 (meses de 2025); en SleakOps las celdas E102, H102 y K102 (meses de 2025).
+- **Comportamiento de T-012 (reemplazado).** Que fueran hitos del programa CEI era una regla financiera no ratificada, así que no se interpretaban como hito, pero tampoco se descartaban: cada monto tipeado de esa fila, en un mes hasta febrero de 2026, abría `fila_sin_interpretar` con clave bloque + clave de la fila + columna (por ejemplo `General:general:E`) y la celda. Las copias de otra planilla y los meses desde marzo de 2026 no daban nada. Verificado en la base local el 20-oct-2026: se abrían los siete problemas, y los hitos eran 91 en Craftech y 10 en SleakOps.
+- **Comportamiento desde T-015 (vigente).** Por declaración de Ariel del 20-oct-2026, pendiente de ratificar por Emi y Ro, cada monto de esa fila, copias de otra planilla incluidas, es un hito del programa CEI hasta septiembre de 2026, también después del corte del 25/2/2026; un monto posterior abre `fila_sin_interpretar` con el motivo. Los siete problemas quedaron resueltos. En el resto de las filas que abren un bloque de funding, un monto tipeado sigue abriendo `fila_sin_interpretar`.
 
 El programa sale de la columna B. **"General" se toma como bloque de funding** porque sus filas son programas de AWS (MAP, POC CASH, CEI). En Craftech de ahí salen 89 de los 91 hitos de Pagos. Esos montos nunca fueron facturas: solo el bloque del encabezado da facturas. Es un supuesto de implementación, no ratificado: está en las preguntas pendientes de abajo.
 
@@ -117,7 +121,7 @@ El programa sale de la columna B. **"General" se toma como bloque de funding** p
 Es una heurística: dos fundings distintos del mismo cliente por el mismo monto también se marcan, y un mismo funding con montos distintos en cada lado no se detecta. El único caso real parece un falso positivo (hallazgo F4 de QA): cruza la celda I4 de FUNDINGS (cargado en febrero de 2026) con la celda K110 de Pagos de Craftech (el mismo cliente con otro texto de alias, agosto de 2025). No se acotó por fecha porque la ventana sería una regla nueva sin ratificar; el problema solo avisa, no borra ni junta nada.
 
 **Preguntas pendientes para Emi y Ro (no bloquean; mientras tanto nada se pierde):**
-1. La fila "General | CEI | CEI" de Pagos, en Craftech y en SleakOps, ¿es un hito por mes del programa CEI? Hoy cada monto abre `fila_sin_interpretar`. Si dicen que sí, se cambia la fila de apertura de "General" para que dé hito.
+1. La fila "General | CEI | CEI" de Pagos, en Craftech y en SleakOps, ¿es un hito por mes del programa CEI? **Respondida por Ariel el 20-oct-2026, pendiente de ratificar por Emi y Ro, ver T-015**: sí, hasta septiembre de 2026; desde T-015 da hito y los siete problemas quedaron resueltos.
 2. ¿"General" es un bloque de funding en las dos planillas? Hoy se toma así en las dos.
 3. Para `funding_duplicado`, ¿alcanza con mismo cliente y mismo monto, o hay que acotar por fecha (por ejemplo, el mes de Pagos no más de N meses antes de la carga en el tracker)?
 
@@ -171,5 +175,5 @@ Mutaciones de la ronda 0, cada una deja `test_fundings.py` en rojo:
 
 - En la máquina local, correr `uv run craftech-os migrate`, `uv run craftech-os sources load` y `uv run craftech-os interpret --all`. Esto lo hice el 20-oct-2026 desde la rama; con `main` es idempotente.
 - Ariel o Ro: cargar alias para "FUNDINGS - Log de status [OFICIAL] / FUNDINGS" y para los bloques de funding de Pagos. Hasta entonces `mcp.fundings` no tiene cliente y la detección de duplicados solo compara textos iguales.
-- Pendiente con Emi y Ro: las tres preguntas de `## Implementation` (fila CEI de "General", "General" como bloque de funding, ventana del duplicado). Para ver los montos que esperan respuesta: `select stable_key, details->>'cell_ref' from issue where issue_type = 'fila_sin_interpretar' and stable_key like '%General:general:%'` (en la base local da los siete de arriba).
+- Pendiente con Emi y Ro: las preguntas de `## Implementation` sobre "General" como bloque de funding y la ventana del duplicado. La de la fila CEI de "General" fue respondida por Ariel el 20-oct-2026, pendiente de ratificar por Emi y Ro, ver T-015 (los siete problemas de esa fila quedaron resueltos ahí).
 - Pendiente con Ro: el criterio de corte (mes en Pagos o fecha de carga), por la fila cargada en enero y cobrada en junio que hoy no está en ningún lado.

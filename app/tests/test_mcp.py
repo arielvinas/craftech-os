@@ -26,6 +26,7 @@ INCOME_VIEWS = (
     "mcp.paridad_pagos",
     "mcp.fundings",
     "mcp.paridad_fundings",
+    "mcp.paridad_fundings_aws",
 )
 
 
@@ -440,12 +441,14 @@ def test_the_catalog_describes_every_column_and_the_glossary_has_the_color_grid(
         "Cobro",
         "Baja",
         "Hito de funding",
+        "CEI",
         "Cotización",
         "Razón social",
         "Alias",
         "Paridad",
     ):
         assert f"**{term}**" in glossary, term
+    assert "pendiente de ratificar por Emi y Ro" in glossary.split("**CEI**", 1)[1]
     for color in ("#00ffff", "#4a86e8", "#ff9900", "#d9ead3", "#ff00ff"):
         assert color in glossary.split("## Hechos de ingresos", 1)[1]
 

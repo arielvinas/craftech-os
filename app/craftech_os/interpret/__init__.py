@@ -68,6 +68,7 @@ COLUMNS = {
         "cell_ref",
     ),
     "payment_total": ("row_key", "month", "amount", "cell_ref"),
+    "funding_total": ("row_key", "month", "amount", "cell_ref"),
     "funding_milestone": (
         "origin",
         "block",
@@ -163,7 +164,9 @@ def run(conn: psycopg.Connection, snapshot_id: int) -> dict | None:
         }
         texts = {a["alias_text"] for a in facts.get("accrual", []) if a["amount_usd"]}
         texts |= {i["alias_text"] for i in facts.get("invoice", [])}
-        texts |= {f["alias_text"] for f in facts.get("funding_milestone", [])}
+        # The CEI row is a program, not a client: it has no alias to ask for.
+        milestones = facts.get("funding_milestone", [])
+        texts |= {f["alias_text"] for f in milestones if not f.get("program_row")}
         unknown = texts - known
         issues += [
             ("alias_sin_cliente", text, {"source": source, "text": text})

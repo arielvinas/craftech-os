@@ -44,6 +44,7 @@ sources:
         key: A
         blocks: ["General", "Funding de AWS confirmados", "Total Ingresos"]
         funding_blocks: ["General", "Funding de AWS confirmados"]
+        funding_total: "TOTAL PAGOS AWS"
         grid: "D:F"
   - title: "Facturación SleakOps Ficticia"
     drive_id: "file-s"
@@ -55,6 +56,7 @@ sources:
         key: A
         blocks: ["Fundings de AWS", "General", "Total Ingresos"]
         funding_blocks: ["Fundings de AWS"]
+        funding_total: "TOTAL PAGOS AWS"
         grid: "D:F"
   - title: "Fundings Ficticios"
     drive_id: "file-f"
@@ -90,6 +92,8 @@ PAGOS = [
     ["Funding de AWS confirmados", None, None, _formula(9999, IMPORTRANGE)],
     ["Cliente Uno", "MAP", "Project", None, "2500"],
     ["Total Ingresos", None, None, "7600", "5500", "7000"],
+    # Found by its text: in the real sheets it is above the header.
+    ["TOTAL PAGOS AWS", None, None, "5000", "5500", "0"],
 ]
 SLEAKOPS = [
     ["Total pagos USA", None, None, "200", "0", "0"],
@@ -100,6 +104,7 @@ SLEAKOPS = [
     ["General"],
     ["Cliente Cuatro", "Alguien", "Servicio", "800"],
     ["Total Ingresos", None, None, "5000", "0", "0"],
+    ["TOTAL PAGOS AWS", None, None, "4000", "0", "1500"],
 ]
 TRACKER_HEADER = [
     "EMPRESA",
@@ -399,19 +404,76 @@ def test_the_same_funding_on_both_sides_is_a_problem_and_both_rows_stay(db, env,
 
 
 def test_an_amount_typed_in_the_row_that_opens_a_block_is_a_problem_not_lost(db, env, fake):
-    # The CEI program on the row of "General": not ratified as a milestone, so a problem.
-    opening = ["General", "CEI", "CEI", "8000", None, "9000"]
     pagos = _edit(PAGOS, 3, 0, None)
-    pagos[3] = opening
-    # A client row copying its amount from another sheet gives nothing.
-    pagos = _edit(pagos, 5, 3, _formula(1234, "='Otra planilla'!D5"))
+    pagos[3] = ["General", "MAP", "Project", "8000"]
     _set(fake, 11, pagos)
     _import(env)
     cells = [row[-1] for row in _fundings(db, "pagos") if row[0] == "Facturación Ficticia"]
     assert cells == ["D5", "E6", "E8"]
     opened = [(k, d) for k, d in _issues(db, "fila_sin_interpretar") if k.startswith("General")]
-    # March 2026 (F4) is after the cut: the tracker holds it.
     assert opened == [("General:general:D", {"block": "General", "cell_ref": "D4"})]
+
+
+def test_a_cei_row_outside_general_is_a_problem_not_a_milestone(db, env, fake):
+    pagos = [row[:] for row in PAGOS]
+    pagos[6] = ["Funding de AWS confirmados", "CEI", "CEI", "8000"]
+    _set(fake, 11, pagos)
+    _import(env)
+    assert "CEI" not in {r[3] for r in _fundings(db, "pagos")}
+    opened = [(k, d) for k, d in _issues(db, "fila_sin_interpretar") if k.startswith("Funding")]
+    assert opened == [
+        (
+            "Funding de AWS confirmados:funding de aws confirmados:D",
+            {"block": "Funding de AWS confirmados", "cell_ref": "D7"},
+        )
+    ]
+
+
+def _months(*days):
+    return [_month((d - EPOCH).days, d.strftime("%b %Y")) for d in days]
+
+
+def test_the_cei_row_of_general_gives_milestones_up_to_september_2026(db, env, fake):
+    # Ariel's declaration of 20-oct-2026, pending ratification: CEI ended in September 2026.
+    sep = date(2026, 9, 1)
+    pagos = [row[:] for row in PAGOS]
+    pagos[1] = [*PAGOS[1][:3], *_months(FEB, sep, date(2026, 10, 1))]
+    # On the CEI row a copy from another sheet counts; on a client row it gives nothing.
+    pagos[3] = ["General", "CEI", "CEI", _formula(8000, IMPORTRANGE), "9000", "7000"]
+    pagos = _edit(pagos, 5, 3, _formula(1234, "='Otra planilla'!D5"))
+    _set(fake, 11, pagos)
+    _import(env)
+    craftech = "Facturación Ficticia"
+    assert [r for r in _fundings(db, "pagos") if r[0] == craftech] == [
+        (craftech, "General", "general", "CEI", 1, "CEI #1", True, FEB, 8000, "D4"),
+        (craftech, "General", "cliente uno", "MAP", 1, "MAP #1", True, FEB, 5000, "D5"),
+        (craftech, "General", "general", "CEI", 2, "CEI #2", True, sep, 9000, "E4"),
+    ]
+    opened = [(k, d) for k, d in _issues(db, "fila_sin_interpretar") if k.startswith("General")]
+    assert opened == [
+        (
+            "General:general:F",
+            {
+                "block": "General",
+                "cell_ref": "F4",
+                "reason": "el programa CEI terminó en septiembre de 2026",
+            },
+        )
+    ]
+    texts = [d["text"] for _, d in _issues(db, "alias_sin_cliente")]
+    assert "cliente uno" in texts and "general" not in texts
+
+    def state():
+        return [
+            db.execute("SELECT * FROM mcp.fundings ORDER BY celda, origen").fetchall(),
+            db.execute(
+                "SELECT id, tipo, estado, celda, detalle FROM mcp.issues ORDER BY id"
+            ).fetchall(),
+        ]
+
+    before = state()
+    assert cli.main(["interpret", "--all"]) == 0
+    assert state() == before
 
 
 def test_a_duplicate_needs_the_same_amount_and_client_and_aliases_join_texts(
@@ -470,6 +532,15 @@ def test_a_missing_tracker_column_and_an_unreadable_amount_are_problems(db, env,
     ]
 
 
+def test_a_tracker_row_of_an_unknown_business_unit_is_kept_and_is_a_problem(db, env, fake):
+    _set(fake, 41, _edit(TRACKER, 1, 3, "Otra"), "file-f")
+    _import(env)
+    assert [r[-1] for r in _fundings(db, "tracker")] == ["H2", "H3", "H5", "H6"]
+    assert ("EMPRESA:cliente cinco:unidad", {"cell_ref": "D2"}) in _issues(
+        db, "fila_sin_interpretar"
+    )
+
+
 def test_parity_is_zero_with_consistent_data_and_shows_a_difference(db, env, fake):
     _import(env)
     assert _parity(db) == [
@@ -483,6 +554,45 @@ def test_parity_is_zero_with_consistent_data_and_shows_a_difference(db, env, fak
         ("Craftech", date(2026, 5, 1), Decimal("7000"), Decimal("6000"), 1000),
         ("SleakOps", MAR, Decimal("1500"), 0, 1500),
     ]
+
+
+def _aws_parity(db):
+    return db.execute(
+        "SELECT planilla, mes, total_planilla, suma_fundings, diferencia"
+        " FROM mcp.paridad_fundings_aws ORDER BY planilla, mes"
+    ).fetchall()
+
+
+def test_aws_parity_adds_pagos_then_cei_and_the_tracker_by_collection_month(db, env, fake):
+    _import(env)
+    craftech, sleakops = "Facturación Ficticia", "Facturación SleakOps Ficticia"
+    may, jul = date(2026, 5, 1), date(2026, 7, 1)
+    assert _aws_parity(db) == [
+        (craftech, JAN, Decimal("5000"), Decimal("5000"), 0),
+        (craftech, FEB, Decimal("5500"), Decimal("5500"), 0),
+        (craftech, MAR, Decimal("0"), 0, 0),
+        # After the grid: the tracker milestones are paid on 20/5 and expected on 1/7.
+        (craftech, may, None, Decimal("6000"), -6000),
+        (craftech, jul, None, Decimal("4000"), -4000),
+        (sleakops, JAN, Decimal("4000"), Decimal("4000"), 0),
+        (sleakops, FEB, Decimal("0"), 0, 0),
+        (sleakops, MAR, Decimal("1500"), Decimal("1500"), 0),
+    ]
+    # March, after the cut: a CEI milestone the total does not add.
+    pagos = [row[:] for row in PAGOS]
+    pagos[3] = ["General", "CEI", "CEI", None, None, "300"]
+    _set(fake, 11, pagos)
+    _import(env)
+    assert (craftech, MAR, Decimal("0"), Decimal("300"), -300) in _aws_parity(db)
+
+
+def test_a_sheet_without_its_aws_total_row_is_a_problem(db, env, fake):
+    _set(fake, 31, SLEAKOPS[:-1], "file-s")
+    _import(env)
+    assert ("falta:total pagos aws", {"row": "total pagos aws"}) in _issues(
+        db, "fila_sin_interpretar"
+    )
+    assert "Facturación SleakOps Ficticia" not in {r[0] for r in _aws_parity(db) if r[2]}
 
 
 def test_no_invoice_view_has_funding_amounts(db, env, fake):
@@ -523,6 +633,10 @@ def test_the_real_config_has_the_fundings_schema():
     assert schema["columns"]["amount_usd"] == "MONTO A PEDIR"
     pagos = parsed["Facturación - SleakOps Total"]["schemas"]["Pagos"]
     assert pagos["funding_blocks"] == ["Fundings de AWS", "General"]
+    assert pagos["funding_total"] == "TOTAL PAGOS AWS"
+    assert parsed["Facturación - Craftech Total"]["schemas"]["Pagos"]["funding_total"] == (
+        "TOTAL PAGOS AWS"
+    )
 
 
 @pytest.mark.parametrize(
@@ -535,6 +649,7 @@ def test_the_real_config_has_the_fundings_schema():
             "{header: C, key: A, grid: 'D:F', blocks: [G], funding_blocks: [H]}",
             "funding_blocks must be among the blocks",
         ),
+        ("{header: C, key: A, grid: 'D:F', funding_total: ''}", "funding_total must be"),
     ],
 )
 def test_an_invalid_fundings_schema_is_rejected(schema, message):
