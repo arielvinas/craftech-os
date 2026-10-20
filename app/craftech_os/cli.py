@@ -344,7 +344,7 @@ def main(argv: list[str] | None = None) -> int:
     diff_cmd.set_defaults(func=cmd_diff)
     interpret_cmd = commands.add_parser(
         "interpret",
-        help="replace the facts of the last snapshot of a tab (VENTAS, Pagos, Pagos ARG)",
+        help="replace the facts of the last snapshot of a tab (VENTAS, Pagos, Pagos ARG, FUNDINGS)",
     )
     which = interpret_cmd.add_mutually_exclusive_group(required=True)
     which.add_argument("--all", action="store_true", help="every active tab")
