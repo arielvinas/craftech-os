@@ -357,7 +357,8 @@ WITH totals AS (
 )
 SELECT s.title AS planilla, t.name AS pestaña, t.id AS pestaña_id, month AS mes,
        totals.amount AS total_planilla, coalesce(sums.amount, 0) AS suma_facturas,
-       coalesce(totals.amount, 0) - coalesce(sums.amount, 0) AS diferencia
+       -- Sheets adds in binary floating point: noise below a cent is not a difference.
+       round(coalesce(totals.amount, 0) - coalesce(sums.amount, 0), 2) AS diferencia
 FROM totals FULL JOIN sums USING (source_tab_id, month)
 JOIN source_tab t ON t.id = source_tab_id AND t.active
 JOIN source s ON s.id = t.source_id;
@@ -369,7 +370,7 @@ COMMENT ON COLUMN mcp.paridad_pagos.pestaña_id IS 'Identificador de la pestaña
 COMMENT ON COLUMN mcp.paridad_pagos.mes IS 'Mes (primer día del mes).';
 COMMENT ON COLUMN mcp.paridad_pagos.total_planilla IS 'Total de la planilla para ese mes; nulo si la fila del total no tiene número en ese mes.';
 COMMENT ON COLUMN mcp.paridad_pagos.suma_facturas IS 'Suma de los montos de las facturas interpretadas de ese mes.';
-COMMENT ON COLUMN mcp.paridad_pagos.diferencia IS 'Total de la planilla menos suma de facturas; 0 si la interpretación cierra.';
+COMMENT ON COLUMN mcp.paridad_pagos.diferencia IS 'Total de la planilla menos suma de facturas, redondeada al centavo (Sheets suma en punto flotante binario y deja restos de millonésimas); 0 si la interpretación cierra.';
 
 GRANT SELECT ON mcp.facturas TO mcp_reader;
 GRANT SELECT ON mcp.cobros TO mcp_reader;

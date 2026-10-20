@@ -87,13 +87,64 @@ Verificado en el repo el 19-oct-2026:
 - [ ] En la planilla de prueba, pintar una celda de factura de cada color de la lista hace que, después de la lectura siguiente, `mcp.facturas` muestre el estado correspondiente. Un color fuera de la lista abre `color_desconocido` y no genera factura.
 - [ ] Vaciar una celda de factura en la planilla de prueba hace que la factura deje de aparecer en `mcp.facturas`, y su historia sigue visible en `mcp.cambios_de_estado_de_factura`.
 - [ ] Pintar de verde una celda de factura hace que `mcp.cobros` muestre el cobro con la fecha del editor una vez que Drive atribuye el cambio, y con la ventana de detección mientras no.
-- [ ] Una factura de Pagos ARG muestra bruto en ARS, neto = bruto / 1,21 y la cotización de la fila que referencia su fórmula. Con la cotización tipeada se abre `cotizacion_tipeada`.
+- [x] Una factura de Pagos ARG muestra bruto en ARS, neto = bruto / 1,21 y la cotización de la fila que referencia su fórmula. Con la cotización tipeada se abre `cotizacion_tipeada`.
 - [ ] Mover una fila de cliente (insertar una fila arriba) en la planilla de prueba no duplica ni pierde su cobro.
 - [ ] En la planilla de prueba con datos consistentes, `mcp.paridad_pagos` da diferencia 0 en todos los meses. En la base local con las lecturas reales, la diferencia de cada mes queda registrada en `## Implementation`, y cada mes distinto de 0 tiene un problema abierto que lo explica o una nota.
-- [ ] Una celda pintada sin monto en Pagos de SleakOps aparece en `mcp.bajas` marcada "color a confirmar".
+- [x] Una celda pintada sin monto en Pagos de SleakOps aparece en `mcp.bajas` marcada "color a confirmar".
 
 ## Out of scope
 
 - Los bloques de funding de AWS de Pagos (T-012).
 - Alertas de cobro y vencimientos vencidos (etapa D); facturas desde Zoho.
 - Herramientas MCP (T-013) y pantallas (T-014).
+
+## Implementation
+
+- `app/migrations/0010_invoices.sql`:
+  - Tablas `invoice`, `payment` (con el `cell_change_id` que la pintó de verde, nulo si ya estaba verde en la primera lectura), `client_churn` y `payment_total` (la fila del total de la planilla por mes, para la paridad). `invoice` guarda también `sent_change_id`, el cambio que la pintó de naranja.
+  - Funciones `a1_column` (columna de una referencia A1) e `invoice_state` (color → estado según la regla R29; otro color da "color desconocido").
+  - Vistas `mcp.facturas` (con vencimiento = fecha del pase a naranja + plazo de pago de la razón social, 10 días si no hay), `mcp.cobros` (fecha y certeza leídas del `cell_change` en el momento de la consulta: editor si Drive lo atribuyó, si no la ventana de detección, si no "fecha desconocida"), `mcp.bajas`, `mcp.cambios_de_estado_de_factura` (sobre `cell_change`, sin tabla) y `mcp.paridad_pagos`. Comentarios en todas las columnas y `GRANT SELECT` a `mcp_reader`.
+- `app/craftech_os/interpret/pagos.py`: intérprete de Pagos y Pagos ARG.
+  - Solo el bloque del encabezado tiene facturas; los bloques de funding quedan para T-012.
+  - La entidad legal es Craftech S.A. en Pagos ARG y Craftech-io Inc. en Pagos.
+  - Una celda con fórmula que copia otra pestaña (contiene `!`) no es factura: se factura en la pestaña de origen.
+  - Factura ARG: neto = bruto / 1,21 redondeado al centavo. La cotización sale de la fila que referencia la fórmula: "MEP" es firme; "Dólar oficial" y cualquier otra fila referenciada (en los datos reales: "Dolar Divisa VTA" y "CCL") quedan "tipo a confirmar" y abren `cotizacion_tipo_a_confirmar`. Un monto sin referencia abre `cotizacion_tipeada`; si la fórmula tiene dos números además del 1,21, el segundo se guarda como cotización tipeada.
+  - `link` une cada factura con el último cambio que la pintó de naranja o de verde, por pestaña, bloque, fila con su orden de serie y mes (la columna se traduce a mes con el encabezado de la lectura de ese cambio), nunca por celda.
+- `interpret/__init__.py`: registra los intérpretes de Pagos y Pagos ARG (el de Pagos ARG suma las cotizaciones de T-010), llama a `link` dentro de la misma transacción y cuenta facturas, cobros y bajas en `tab_interpreted`. `cli.py` muestra esas cantidades.
+- `diff/compare.py`: un cambio de valor guarda también el color anterior y el nuevo, para ver un monto tipeado en una celda ya pintada.
+- El fixture de Pagos ARG de `test_interpret.py` pasó al orden real de las filas (las MEP debajo de "Total Ingresos").
+- `mcp.paridad_pagos` redondea la diferencia al centavo: Sheets suma en punto flotante binario y dejaba restos de millonésimas en 24 meses de Pagos ARG.
+- Medido en la base local (20-oct-2026, `interpret --all` sobre las lecturas actuales):
+  - Craftech Pagos: 392 facturas, 331 cobros, 48 ms. Craftech Pagos ARG: 193 facturas, 150 cobros, 27 ms. SleakOps Pagos: 976 facturas, 567 cobros, 4 bajas (todas "color a confirmar"), 70 ms. SleakOps Pagos ARG: 38 facturas, 21 cobros, 8 ms.
+  - Cobros: 30 con fecha del editor, 1039 con "fecha desconocida" (ya estaban verdes en la primera lectura). 110 filas en `mcp.cambios_de_estado_de_factura`. De 12 facturas enviadas, 2 tienen vencimiento (las otras 10 ya estaban naranjas en la primera lectura).
+  - Facturas ARG: 231, 11 sin cotización legible y 218 con USD inferido. Problemas: 15 `cotizacion_tipeada`, 5 `cotizacion_tipo_a_confirmar`, 1 `color_desconocido` (#ea9999, 22 celdas de SleakOps Pagos).
+- Paridad en la base local, por mes:
+  - Craftech Pagos: 36 meses, todos con diferencia 0.
+  - Craftech Pagos ARG: 36 meses, todos con diferencia 0.
+  - SleakOps Pagos ARG: 36 meses, todos con diferencia 0.
+  - SleakOps Pagos: 35 meses con diferencia 0 y uno distinto de 0, mayo de 2025.
+- Nota sobre mayo de 2025: la fórmula del total de la planilla para ese mes es `=SUM(H13:H…)+H…` y no incluye la fila 76, que es una factura verde. La diferencia es exactamente el monto de esa celda. Es un error de la planilla y no de la interpretación; hay que avisarle a Finanzas (ver post-merge).
+- Los criterios 1, 2, 3, 5 y 6 (planilla de prueba) están probados con el Google falso por el mismo camino del importer y del diff. Falta verlos contra la planilla de prueba real de Ariel, así que quedan sin tildar. Los criterios 4 y 7 están probados con tests y vistos en la base local.
+
+## Test plan
+
+1. `test_each_color_is_a_state_and_cells_without_invoice_give_none`: los seis estados, un color fuera de la lista (`color_desconocido` y ninguna factura), un monto ilegible (`valor_ilegible`), un 0 con color, un magenta sin monto, una copia de Pagos ARG que no es factura, Marketplace como factura más y la serie repetida (`identidad_en_revision`).
+2. `test_an_emptied_invoice_disappears_and_its_history_stays`: la factura vaciada deja `mcp.facturas` y queda en `mcp.cambios_de_estado_de_factura`, igual que un monto tipeado en una celda vacía.
+3. `test_a_payment_gets_the_editor_date_once_drive_attributes_it`: un cobro de la primera lectura con "fecha desconocida"; uno nuevo con la ventana de detección y, después de la atribución, con la fecha del editor sin reinterpretar.
+4. `test_a_payment_repainted_green_points_at_the_last_change`: verde, azul y verde otra vez dan el último cambio.
+5. `test_a_row_inserted_above_keeps_its_payment`.
+6. `test_an_arg_invoice_has_gross_net_rate_and_inferred_usd`: fórmula a la MEP, a "Dólar oficial", a una fila desconocida, tipeada y un monto sin fórmula.
+7. `test_parity_is_zero_with_consistent_data_and_shows_a_missing_invoice`.
+8. `test_a_painted_cell_without_amount_in_sleakops_is_a_churn_to_be_confirmed`.
+9. `test_interpret_twice_leaves_the_same_facts_and_nothing_logs_amounts`.
+
+Mutaciones: cambiar el estado del verde a "enviada" deja 6 tests en rojo; tomar el primer cambio a verde en vez del último deja en rojo el test 4.
+
+Blast radius: toda lectura de Pagos y Pagos ARG pasa ahora por el intérprete dentro de su transacción (un error frena la lectura de esa pestaña). `cell_change` de tipo valor guarda los colores (el diff de todas las pestañas). Los tests de Pagos ARG de T-010 usan el orden real de filas.
+
+## Post-merge
+
+1. `craftech-os migrate` (aplica 0010). En la base local principal ya está aplicada con el texto final: se aplicó en el smoke, se deshizo a mano y se volvió a aplicar después del redondeo de la paridad.
+2. `craftech-os interpret --all` y revisar `mcp.paridad_pagos`, `cotizacion_tipeada` y `cotizacion_tipo_a_confirmar`.
+3. Avisarle a Finanzas que el total de mayo de 2025 en Pagos de SleakOps no suma la fila 76.
+4. Probar en la planilla de prueba de Ariel los criterios 1, 2, 3, 5 y 6 (colores, vaciado, cobro con atribución, fila insertada, paridad).
