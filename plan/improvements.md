@@ -41,3 +41,4 @@
 - [ ] [tests] Pagos: fila sin clave y monto ilegible dentro de un bloque de funding sin test (2 mutantes sobreviven) — QA T-012 r2
 - [ ] [regla] el único funding_duplicado real (FUNDINGS I4 vs Pagos K110) parece falso positivo; ¿acotar por fecha? pendiente Emi y Ro — QA T-012 r1/r2
 - [ ] [audit] Crear un cliente desde el servidor MCP (vincular_alias) queda auditado sin autor: la tabla client de T-009 no tiene columna de autor — QA T-013 r1 (F2, split-out)
+- [ ] [tests] vincular_alias: faltan tests para texto o cliente vacíos y para el filtro de estado del problema (abierto/reabierto); tres mutantes sobreviven — QA T-013 r1 (F1)
