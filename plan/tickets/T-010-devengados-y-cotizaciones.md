@@ -117,6 +117,11 @@ Verificado en el repo el 19-oct-2026:
   - `pyproject.toml`: `ruff` excluye `plan/` (el arnés de mutantes de QA en `plan/qa/evidence/` rompía `ruff check`).
   - `interpret --all` sobre las lecturas reales después del arreglo: mismas cantidades (860, 1057, 72 y 72), 4 a 50 ms por pestaña.
 - Los criterios 1 y 2 (lectura del worker sobre la planilla de prueba) están probados con el Google falso por el mismo camino del importer (`test_ventas_with_a_cliente_header...`, `test_a_new_read_replaces...`); falta verlos contra la planilla de prueba real.
+- Revisión de CodeRabbit (PR #10):
+  - La fuente de un alias se escribe con un espacio a cada lado de "/" en los dos lados (`clients.alias_source`), así "Planilla/VENTAS" en el CSV coincide con la pestaña.
+  - Un número del encabezado fuera del rango de fechas no es mes (antes tiraba `OverflowError` y frenaba el worker); cerrado en `plan/improvements.md`.
+  - `sources.yaml` rechaza un esquema de VENTAS o Pagos ARG sin `grid`.
+  - `mcp.devengados` y `mcp.cotizaciones` muestran solo los hechos de la última lectura de cada pestaña (como `mcp.celdas`): si la lectura nueva no se interpreta (pestaña reclasificada o sin esquema), los hechos viejos no aparecen como vigentes. La 0009 cambió otra vez: en la base local principal se reemplazaron las dos vistas a mano y se actualizó su `sha256`; `migrate` dice "nothing to apply".
 
 ## Test plan
 
@@ -132,17 +137,12 @@ Verificado en el repo el 19-oct-2026:
 10. `test_a_new_read_replaces_the_accruals_of_the_previous_one` y `test_events_count_facts_and_time_and_nothing_carries_amounts`.
 
 11. Ronda 1: `test_a_repeated_month_column_is_a_problem_and_the_read_goes_on`, `test_a_row_whose_text_ends_like_a_series_suffix_is_its_own_row`, `test_an_error_in_a_grid_cell_is_unreadable`, `test_a_ventas_tab_without_schema_or_not_carga_is_not_touched`, `test_a_header_number_that_is_not_a_date_is_not_a_month`.
+12. Revisión de CodeRabbit: `test_a_header_date_out_of_range_is_not_a_month`, `test_an_interpreted_tab_without_grid_is_rejected`, `test_facts_of_an_older_reading_are_hidden_once_a_newer_one_is_not_interpreted`, y el alias de `test_a_client_without_alias_shows_up_once_the_alias_is_loaded` escrito "planilla/pestaña" sin espacios.
 
 Blast radius: toda importación pasa ahora por `interpret.run` dentro de su transacción (un error del intérprete frena la lectura de esa pestaña); `aliases load` normaliza la fuente (`test_clients` actualizado); el CHECK de `issue_type` se recrea.
 
 ## Post-merge
 
-1. `craftech-os migrate` (aplica 0008 si falta y 0009). Si alguna base tiene aplicada la 0009 de una versión anterior de esta rama, `migrate` falla con "changed after it was applied": borrar `accrual`, `fx_rate`, las vistas `mcp.devengados` y `mcp.cotizaciones` y la fila de `schema_migration`, o reemplazar la restricción única de `accrual` y actualizar el `sha256` (así se hizo en la base local principal el 20-oct).
+1. `craftech-os migrate` (aplica 0008 si falta y 0009). Si alguna base tiene aplicada la 0009 de una versión anterior de esta rama, `migrate` falla con "changed after it was applied": borrar `accrual`, `fx_rate`, las vistas `mcp.devengados` y `mcp.cotizaciones` y la fila de `schema_migration`, o reemplazar la restricción única de `accrual` y las dos vistas (`CREATE OR REPLACE VIEW` con el texto de la 0009) y actualizar el `sha256` (así se hizo en la base local principal el 20-oct).
 2. Recargar los aliases con la `fuente` en formato "Planilla / Pestaña" (por ejemplo "Facturación - Craftech Total / VENTAS"); los cargados con la fuente vieja no resuelven clientes.
 3. `craftech-os interpret --all` y revisar `alias_sin_cliente` y `cotizacion_discrepante`.
-
-- Revisión de CodeRabbit (PR #10):
-  - La fuente de un alias se escribe con un espacio a cada lado de "/" en los dos lados (`clients.alias_source`), así "Planilla/VENTAS" en el CSV coincide con la pestaña.
-  - Un número del encabezado fuera del rango de fechas no es mes (antes tiraba `OverflowError` y frenaba el worker); cerrado en `plan/improvements.md`.
-  - `sources.yaml` rechaza un esquema de VENTAS o Pagos ARG sin `grid`.
-  - `mcp.devengados` y `mcp.cotizaciones` muestran solo los hechos de la última lectura de cada pestaña (como `mcp.celdas`): si la lectura nueva no se interpreta (pestaña reclasificada o sin esquema), los hechos viejos no aparecen como vigentes. La 0009 cambió otra vez: en la base local principal se reemplazaron las dos vistas a mano y se actualizó su `sha256`; `migrate` dice "nothing to apply".
