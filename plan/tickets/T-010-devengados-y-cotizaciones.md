@@ -91,3 +91,7 @@ Verificado en el repo el 19-oct-2026:
 - Facturas, cobros y bajas de Pagos y Pagos ARG (T-011); fundings (T-012).
 - Herramientas MCP nuevas (T-013) y pantallas (T-014).
 - Contratos, objetivos de venta (pregunta F-23) y el P&L de la etapa C.
+
+## Decisions
+
+- 2026-10-20 — **¿Cómo se identifica la fuente de un alias? Hoy es texto libre y 'Pagos' y 'pagos' quedan como dos fuentes distintas (pregunta que dejó QA de T-009).** → Planilla + pestaña: la fuente de un alias es el par planilla y pestaña; el mismo alias en la misma pestaña es uno solo, sin distinguir mayúsculas. Si cambiar esto no entra en el alcance de T-010, registrarlo en plan/improvements.md.
