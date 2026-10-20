@@ -1,7 +1,7 @@
 ---
 id: T-013
 title: Servidor MCP v1: herramienta vincular_alias y catálogo y glosario con los hechos de ingresos
-status: todo
+status: in-progress
 priority: high
 lane: api
 depends_on: [T-012]
