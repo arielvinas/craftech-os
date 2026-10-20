@@ -107,6 +107,15 @@ Verificado en el repo el 19-oct-2026:
 - La MEP operativa es la última fila "MEP" de la pestaña; las anteriores son de control. "Dólar oficial" se ubica aunque esté arriba del encabezado.
 - Medido en la base local (20-oct-2026, `interpret --all`, lecturas actuales): Craftech Pagos ARG 10 ms (72 cotizaciones), Craftech VENTAS 53 ms (860 devengados), SleakOps Pagos ARG 3 ms (72), SleakOps VENTAS 30 ms (1057). El comando completo tardó 4,2 s.
 - Lo que encontró en datos reales: 1 `cotizacion_discrepante` en Craftech (MEP de control distinta de la operativa en un mes), 185 `alias_sin_cliente` (los aliases cargados usan la fuente vieja; ver post-merge), 26 `identidad_en_revision`, 1 `fila_sin_interpretar` (la fila "General" de SleakOps tiene montos).
+- Ronda de arreglos 1 (`plan/qa/T-010-round-1.md`):
+  - F1: un mes repetido en el encabezado queda solo en su primera columna (`cells.grid`); los montos de la columna repetida abren `fila_sin_interpretar` y la lectura sigue. La unicidad de `accrual` pasa a ser por pestaña, bloque, texto del alias, orden de la serie y mes, así que una fila "Cliente Uno (2)" literal ya no choca con la segunda serie de "Cliente Uno". La 0009 cambió: en la base local principal (que la tenía aplicada desde esta rama) se reemplazó la restricción a mano y se actualizó su `sha256`; `migrate` dice "nothing to apply".
+  - F2: en Pagos ARG, una cotización en una columna sin mes propio (mes repetido) abre `fila_sin_interpretar` en vez de pisar la primera.
+  - F3: se conserva la rama del intérprete y se agrega el test con una celda `#REF!` (que `detect.find` no ve) en VENTAS y en Pagos ARG.
+  - F4: test con una pestaña "VENTAS" sin esquema y otra reclasificada como HISTORICA.
+  - F5: un número del encabezado es mes solo si su formato muestra el año (`yy`); los cuatro encabezados reales usan `mmmm yyyy`. Test con un `2025` numérico y una fecha de mitad de mes.
+  - La clase general (excepciones distintas de `DataError` que tumban el worker) quedó en `plan/improvements.md`; no se tocó el importer.
+  - `pyproject.toml`: `ruff` excluye `plan/` (el arnés de mutantes de QA en `plan/qa/evidence/` rompía `ruff check`).
+  - `interpret --all` sobre las lecturas reales después del arreglo: mismas cantidades (860, 1057, 72 y 72), 4 a 50 ms por pestaña.
 - Los criterios 1 y 2 (lectura del worker sobre la planilla de prueba) están probados con el Google falso por el mismo camino del importer (`test_ventas_with_a_cliente_header...`, `test_a_new_read_replaces...`); falta verlos contra la planilla de prueba real.
 
 ## Test plan
@@ -122,11 +131,13 @@ Verificado en el repo el 19-oct-2026:
 9. `test_a_tab_without_interpreter_is_not_touched`.
 10. `test_a_new_read_replaces_the_accruals_of_the_previous_one` y `test_events_count_facts_and_time_and_nothing_carries_amounts`.
 
+11. Ronda 1: `test_a_repeated_month_column_is_a_problem_and_the_read_goes_on`, `test_a_row_whose_text_ends_like_a_series_suffix_is_its_own_row`, `test_an_error_in_a_grid_cell_is_unreadable`, `test_a_ventas_tab_without_schema_or_not_carga_is_not_touched`, `test_a_header_number_that_is_not_a_date_is_not_a_month`.
+
 Blast radius: toda importación pasa ahora por `interpret.run` dentro de su transacción (un error del intérprete frena la lectura de esa pestaña); `aliases load` normaliza la fuente (`test_clients` actualizado); el CHECK de `issue_type` se recrea.
 
 ## Post-merge
 
-1. `craftech-os migrate` (aplica 0008 si falta y 0009).
+1. `craftech-os migrate` (aplica 0008 si falta y 0009). Si alguna base tiene aplicada la 0009 de una versión anterior de esta rama, `migrate` falla con "changed after it was applied": borrar `accrual`, `fx_rate`, las vistas `mcp.devengados` y `mcp.cotizaciones` y la fila de `schema_migration`, o reemplazar la restricción única de `accrual` y actualizar el `sha256` (así se hizo en la base local principal el 20-oct).
 2. Recargar los aliases con la `fuente` en formato "Planilla / Pestaña" (por ejemplo "Facturación - Craftech Total / VENTAS"); los cargados con la fuente vieja no resuelven clientes.
 3. `craftech-os interpret --all` y revisar `alias_sin_cliente` y `cotizacion_discrepante`.
 
