@@ -423,8 +423,13 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
         )
         return {"actor_id": actor_id, "nombre_persona": nombre_persona.strip()}
 
-    def clients_by_name() -> dict[str, dict]:
-        return {normalize(c["nombre"]): c for c in rows("SELECT id, nombre FROM mcp.clientes")}
+    def clients_named(key: str) -> tuple[list[dict], list[dict]]:
+        clients = rows("SELECT id, nombre FROM mcp.clientes")
+        matches = [c for c in clients if normalize(c["nombre"]) == key]
+        if len(matches) > 1:
+            names = ", ".join(repr(c["nombre"]) for c in matches)
+            raise ToolError(f"El cliente es ambiguo: {names} se escriben igual.")
+        return matches, clients
 
     def vincular_alias(
         fuente: str,
@@ -444,13 +449,15 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
         tabs = rows("SELECT planilla, pestaña FROM mcp.tabs")
         if not any(alias_source(f"{t['planilla']} / {t['pestaña']}") == source for t in tabs):
             raise ToolError(f"La fuente {fuente!r} no es «planilla / pestaña» de ninguna pestaña.")
-        clients = clients_by_name()
-        created = key not in clients
+        matches, clients = clients_named(key)
+        created = not matches
         if created and not crear_cliente:
             similar = sorted(
                 c["nombre"]
-                for k, c in clients.items()
-                if key in k or k in key or difflib.SequenceMatcher(None, key, k).ratio() >= 0.6
+                for c in clients
+                if key in (k := normalize(c["nombre"]))
+                or k in key
+                or difflib.SequenceMatcher(None, key, k).ratio() >= 0.6
             )
             raise ToolError(
                 f"El cliente {name!r} no existe. Parecidos: {', '.join(similar) or 'ninguno'}."
@@ -459,8 +466,8 @@ def build_server(reader_url: str, writer_url: str | None) -> MCPServer:
         if created:
             # The writer cannot SELECT: the new id is read back through the reader.
             insert("INSERT INTO client (name) VALUES (%s)", (name,))
-            clients = clients_by_name()
-        client = clients[key]
+            matches, _ = clients_named(key)
+        client = matches[0]
         problems = [
             p["id"]
             for p in rows(

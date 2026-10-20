@@ -661,6 +661,22 @@ def test_vincular_alias_without_the_client_lists_similar_ones_and_writes_nothing
     assert counts == (2, 0, 0)
 
 
+def test_vincular_alias_rejects_a_client_name_that_normalizes_to_two_clients(server, db):
+    _income(db)
+    db.execute("INSERT INTO client (name) VALUES ('Ficticia Uno'), (' ficticia  UNO ')")
+    with pytest.raises(ToolError, match="ambiguo"):
+        _call(
+            server,
+            "vincular_alias",
+            fuente="Planilla de Prueba / VENTAS",
+            texto="cliente inventado",
+            cliente="Ficticia Uno",
+            autor="Ariel",
+            motivo="prueba",
+        )
+    assert db.execute("SELECT count(*) FROM client_alias").fetchone() == (0,)
+
+
 def test_consultar_sql_reads_every_income_view(server, db):
     _income(db)
     for view in INCOME_VIEWS:

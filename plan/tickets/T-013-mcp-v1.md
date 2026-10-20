@@ -52,7 +52,7 @@ Verificado en el repo el 19-oct-2026:
 
 ## Acceptance criteria
 
-- [x] Desde Claude Desktop, con una fila de prueba sin cliente, `vincular_alias` la vincula. `mcp.devengados` y `mcp.facturas` muestran el cliente sin reinterpretar, y el problema `alias_sin_cliente` queda resuelto con el autor y el motivo dados. (verificado con el servidor MCP en los tests y por stdio con un cliente MCP; la aplicación Claude Desktop en sí no se abrió).
+- [ ] Desde Claude Desktop, con una fila de prueba sin cliente, `vincular_alias` la vincula. `mcp.devengados` y `mcp.facturas` muestran el cliente sin reinterpretar, y el problema `alias_sin_cliente` queda resuelto con el autor y el motivo dados. (verificado con el servidor MCP en los tests y por stdio con un cliente MCP; pendiente el paso humano en la aplicación Claude Desktop, que QA no abre: ver `plan/qa/T-013-round-1.md`, «No verificado»).
 - [x] La escritura queda en la auditoría de `record_mcp_write`.
 - [x] `craftech://catalogo` lista las vistas de ingresos con sus comentarios, y `craftech://glosario` define cada hecho con su regla en palabras.
 - [x] Una llamada a `vincular_alias` sin autor o sin motivo devuelve un error y no escribe nada.
