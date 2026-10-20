@@ -45,3 +45,4 @@
 - [ ] [ui] Mes por defecto de /facturas usa la fecha del sistema, no la zona horaria de Craftech — QA T-014 r1 (F2)
 - [ ] [robustez] client_rows puede dar 500 si se agrega un cliente durante la carga de la página — QA T-014 r1 (F3)
 - [ ] [ui] A 375 px todas las pantallas de la web desbordan hacia la derecha y la barra del menú queda cortada (previo a T-014) — QA T-014 r1 (F4)
+- [ ] [ui] 'sin cliente' se ve distinto en Facturas y en Fundings; colores por estado escritos dos veces — QA T-014 r1 (F5, F6)
