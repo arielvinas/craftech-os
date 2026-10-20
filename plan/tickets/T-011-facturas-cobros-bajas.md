@@ -7,6 +7,7 @@ lane: core
 depends_on: [T-010]
 effort: M
 milestone: B
+branch: arielvinas/t-011-facturas-cobros-bajas
 ---
 
 ## Context
