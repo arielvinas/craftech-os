@@ -240,6 +240,19 @@ def test_a_payment_gets_the_editor_date_once_drive_attributes_it(db, env, fake):
     assert ("cliente uno", FEB, "E3", edited_at, "editor", change) in _payments(db)
 
 
+def test_a_payment_repainted_green_points_at_the_last_change(db, env, fake):
+    _import(env)
+    for color in (GREEN, BLUE, GREEN):
+        _set(fake, 11, _edit(PAGOS, 2, 4, _value("1200", color)))
+        _import(env)
+    (last,) = db.execute(
+        "SELECT max(id) FROM cell_change WHERE change_type = 'color' AND cell_ref = 'E3'"
+        " AND new_color = %s",
+        (GREEN,),
+    ).fetchone()
+    assert ("cliente uno", FEB, "E3", WINDOW_END, "ventana de detección", last) in _payments(db)
+
+
 def test_a_row_inserted_above_keeps_its_payment(db, env, fake):
     _import(env)
     paid = _edit(PAGOS, 2, 4, _value("1200", GREEN))
