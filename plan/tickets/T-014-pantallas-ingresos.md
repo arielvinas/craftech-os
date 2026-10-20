@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: Pantallas web de solo lectura: Facturas y cobros, Fundings y Clientes
-status: qa
+status: pr
 priority: medium
 lane: ui
 depends_on: [T-012]
