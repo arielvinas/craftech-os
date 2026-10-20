@@ -1,7 +1,7 @@
 ---
 id: T-012
 title: Fundings: esquema del tracker FUNDINGS e interpretación del bloque de AWS de Pagos y del tracker, con corte al 25/2/2026 y paridad
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: [T-011]
