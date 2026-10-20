@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: Devengados y cotizaciones: módulo interpret con VENTAS y las filas de cotización de Pagos ARG, enganchado al worker
-status: qa
+status: in-progress
 priority: high
 lane: core
 depends_on: [T-009]
