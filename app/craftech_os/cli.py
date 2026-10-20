@@ -249,7 +249,9 @@ def cmd_interpret(args) -> None:
             done += 1
             print(
                 f"{title} / {name}: {counts['accrual']} accruals, {counts['fx_rate']} fx rates,"
-                f" {counts['issues']} issues, {counts['duration_ms']} ms"
+                f" {counts['invoice']} invoices, {counts['payment']} payments,"
+                f" {counts['client_churn']} churn, {counts['issues']} issues,"
+                f" {counts['duration_ms']} ms"
             )
     print(f"{done} tabs interpreted")
 
@@ -340,7 +342,8 @@ def main(argv: list[str] | None = None) -> int:
     diff_cmd.add_argument("--to", dest="to_id", type=int, help="default: the latest snapshot")
     diff_cmd.set_defaults(func=cmd_diff)
     interpret_cmd = commands.add_parser(
-        "interpret", help="replace the facts of the last snapshot of a tab (VENTAS, Pagos ARG)"
+        "interpret",
+        help="replace the facts of the last snapshot of a tab (VENTAS, Pagos, Pagos ARG)",
     )
     which = interpret_cmd.add_mutually_exclusive_group(required=True)
     which.add_argument("--all", action="store_true", help="every active tab")
