@@ -50,3 +50,4 @@
 - [ ] [robustez] client_rows puede dar 500 si se agrega un cliente durante la carga de la página — QA T-014 r1 (F3)
 - [ ] [ui] A 375 px todas las pantallas de la web desbordan hacia la derecha y la barra del menú queda cortada (previo a T-014) — QA T-014 r1 (F4)
 - [ ] [ui] 'sin cliente' se ve distinto en Facturas y en Fundings; colores por estado escritos dos veces — QA T-014 r1 (F5, F6)
+- [ ] [test-gap] Ningún test fija que la fila CEI sea la primera del bloque General de Pagos: una fila de apertura de otro bloque con programa CEI daría hitos posteriores al corte del 25-feb-2026 sin que falle nada — QA T-015 r1 (F1)
