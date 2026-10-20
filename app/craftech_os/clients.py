@@ -131,8 +131,10 @@ def load_zoho(conn: psycopg.Connection, path: Path) -> dict:
 
 
 def load_aliases(conn: psycopg.Connection, path: Path) -> dict:
-    """Insert each alias decision not already recorded, word for word.
+    """Insert each alias decision not already recorded.
 
+    The source ("Planilla / Pestaña") and the text are stored normalized, so the same alias
+    written with other capitals or accents is one decision.
     The client is found by its nombre de fantasía or one of its razones sociales, both
     normalized, and created by that name if there is none.
     """
@@ -155,7 +157,7 @@ def load_aliases(conn: psycopg.Connection, path: Path) -> dict:
             client_id, created = _client(conn, clients, row["cliente"])
             counts["clients_created"] += created
             decision = (
-                row["fuente"],
+                normalize(row["fuente"]),
                 normalize(row["texto"]),
                 client_id,
                 row["decidio"],

@@ -7,7 +7,7 @@ from pathlib import Path
 import psycopg
 from googleapiclient.errors import HttpError
 
-from craftech_os import attribution, clients, events, migrate, sources, worker
+from craftech_os import attribution, clients, events, interpret, migrate, sources, worker
 from craftech_os.diff import store
 from craftech_os.ingest import drive_activity, importer
 from craftech_os.ingest.google import Google, GoogleError
@@ -228,6 +228,32 @@ def cmd_diff(args) -> None:
     print(f"{sum(counts.values())} changes, ambiguous {len(result['ambiguous'])}")
 
 
+def cmd_interpret(args) -> None:
+    """Reinterpret the last snapshot of one tab or of every active tab; idempotent."""
+    with _connect() as conn:
+        latest = conn.execute(
+            "SELECT DISTINCT ON (n.source_tab_id) n.id, s.title, t.name"
+            " FROM snapshot n JOIN source_tab t ON t.id = n.source_tab_id"
+            " JOIN source s ON s.id = t.source_id"
+            " WHERE t.active AND (%(tab)s::bigint IS NULL OR t.id = %(tab)s)"
+            " ORDER BY n.source_tab_id, n.read_at DESC, n.id DESC",
+            {"tab": args.tab},
+        ).fetchall()
+        if args.tab is not None and not latest:
+            raise sources.SourcesError(f"no active tab {args.tab} with a snapshot")
+        done = 0
+        for snapshot_id, title, name in latest:
+            counts = interpret.run(conn, snapshot_id)
+            if counts is None:
+                continue
+            done += 1
+            print(
+                f"{title} / {name}: {counts['accrual']} accruals, {counts['fx_rate']} fx rates,"
+                f" {counts['issues']} issues, {counts['duration_ms']} ms"
+            )
+    print(f"{done} tabs interpreted")
+
+
 def cmd_worker(args) -> None:
     google = Google.from_environment()
     with _connect() as conn:
@@ -313,6 +339,13 @@ def main(argv: list[str] | None = None) -> int:
     diff_cmd.add_argument("--from", dest="from_id", type=int, help="default: the one before --to")
     diff_cmd.add_argument("--to", dest="to_id", type=int, help="default: the latest snapshot")
     diff_cmd.set_defaults(func=cmd_diff)
+    interpret_cmd = commands.add_parser(
+        "interpret", help="replace the facts of the last snapshot of a tab (VENTAS, Pagos ARG)"
+    )
+    which = interpret_cmd.add_mutually_exclusive_group(required=True)
+    which.add_argument("--all", action="store_true", help="every active tab")
+    which.add_argument("--tab", type=int, help="one tab, by its id (mcp.tabs.id)")
+    interpret_cmd.set_defaults(func=cmd_interpret)
     worker_cmd = commands.add_parser("worker", help="read changed spreadsheets every five minutes")
     worker_cmd.add_argument("--dir", type=Path, default=worker.BACKUPS_DIR, help="for the dumps")
     worker_cmd.set_defaults(func=cmd_worker)
