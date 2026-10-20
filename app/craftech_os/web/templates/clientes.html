@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<h1>Clientes</h1>
+<p>Los aliases se vinculan desde Claude Desktop, con <code>vincular_alias</code>.</p>
+
+<h2>Filas sin cliente</h2>
+{% if without %}
+<table>
+  <thead><tr><th>Texto</th><th>Planilla › pestaña</th><th>Visto por última vez</th><th>Estado</th></tr></thead>
+  <tbody>
+    {% for i in without %}
+    <tr>
+      <td><a href="/problemas/{{ i.id }}">{{ i.details.text }}</a></td>
+      <td>{{ i.source_title }}{% if i.tab_name %} › {{ i.tab_name }}{% endif %}</td>
+      <td>{{ i.last_seen_at | when }}</td>
+      <td class="status-{{ i.status }}">{{ i.status }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay filas sin cliente.</p>
+{% endif %}
+
+<h2>Clientes</h2>
+{% if rows %}
+<table>
+  <thead><tr><th>Cliente</th><th>Razones sociales</th><th>Aliases vigentes</th></tr></thead>
+  <tbody>
+    {% for c in rows %}
+    <tr>
+      <td>{{ c.nombre }}{% if c.hubspot_id %}<br><small>HubSpot {{ c.hubspot_id }}</small>{% endif %}</td>
+      <td>
+        {% for r in c.razones %}{{ r.razon_social }} ({{ r.sociedad_craftech }}, {{ r.plazo_pago_dias }} días)<br>{% else %}—{% endfor %}
+      </td>
+      <td>
+        {% for a in c.aliases %}<code>{{ a.texto }}</code> en {{ a.fuente }}<br>{% else %}—{% endfor %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay clientes cargados.</p>
+{% endif %}
+{% endblock %}

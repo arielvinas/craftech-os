@@ -239,3 +239,98 @@ def request_read(conn: psycopg.Connection, source_id: int) -> str | None:
         (source_id,),
     ).rowcount
     return "created" if inserted else "pending"
+
+
+def invoice_months(conn: psycopg.Connection) -> list:
+    return [r[0] for r in conn.execute("SELECT DISTINCT mes FROM mcp.facturas ORDER BY 1 DESC")]
+
+
+def clients(conn: psycopg.Connection) -> list[tuple[int, str]]:
+    return conn.execute("SELECT id, nombre FROM mcp.clientes ORDER BY nombre").fetchall()
+
+
+def invoices(conn: psycopg.Connection, f: dict) -> list[dict]:
+    """The month's invoices with their razón social, payment and source cell."""
+    clauses, params = ["f.mes = %s"], [f["mes"]]
+    for column, key in (("f.estado", "estado"), ("f.entidad_legal", "entidad"),
+                        ("f.cliente_id", "cliente")):  # fmt: skip
+        if f[key] is not None:
+            clauses.append(f"{column} = %s")
+            params.append(f[key])
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            SELECT f.*, c.fecha AS cobro_fecha, c.certeza AS cobro_certeza,
+                c.origen_fecha AS cobro_origen, s.drive_id, t.sheet_id,
+                (SELECT string_agg(r.razon_social, ', ' ORDER BY r.razon_social)
+                 FROM mcp.razones_sociales r
+                 WHERE r.cliente_id = f.cliente_id AND r.sociedad_craftech = f.entidad_legal)
+                    AS razon_social
+            FROM mcp.facturas f
+            JOIN source_tab t ON t.id = f.pestaña_id
+            JOIN source s ON s.id = t.source_id
+            LEFT JOIN mcp.cobros c ON c.pestaña_id = f.pestaña_id
+                AND c.lectura_id = f.lectura_id AND c.celda = f.celda
+            WHERE {" AND ".join(clauses)}
+            ORDER BY f.planilla, f.pestaña, f.cliente NULLS LAST, f.clave_fila, f.serie
+            """,
+            params,
+        ).fetchall()
+
+
+def invoice_parity(conn: psycopg.Connection, month) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT * FROM mcp.paridad_pagos WHERE mes = %s ORDER BY planilla, pestaña", (month,)
+        ).fetchall()
+
+
+def fundings(conn: psycopg.Connection) -> list[dict]:
+    """Every milestone, marked when an open funding_duplicado problem names its cell."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT f.*, s.drive_id, t.sheet_id,
+                (SELECT min(i.id) FROM v_issue i
+                 WHERE i.issue_type = 'funding_duplicado'
+                   AND i.status IN ('abierto', 'reabierto')
+                   AND jsonb_build_object('planilla', f.planilla, 'pestaña', f.pestaña,
+                                          'cell_ref', f.celda)
+                       IN (i.details -> 'tracker', i.details -> 'pagos')) AS duplicado_id
+            FROM mcp.fundings f
+            JOIN source_tab t ON t.id = f.pestaña_id
+            JOIN source s ON s.id = t.source_id
+            ORDER BY f.cliente NULLS LAST, f.programa NULLS LAST, f.orden_en_programa,
+                f.origen, f.planilla, f.celda
+            """
+        ).fetchall()
+
+
+def funding_parity(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT * FROM mcp.paridad_fundings ORDER BY mes DESC, planilla, unidad_negocio"
+        ).fetchall()
+
+
+def client_rows(conn: psycopg.Connection) -> list[dict]:
+    """Each client with its razones sociales and its current aliases."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute("SELECT id, nombre, hubspot_id FROM mcp.clientes ORDER BY nombre")
+        found = {r["id"]: {**r, "razones": [], "aliases": []} for r in rows.fetchall()}
+        for r in cur.execute(
+            "SELECT * FROM mcp.razones_sociales ORDER BY razon_social, id"
+        ).fetchall():
+            found[r["cliente_id"]]["razones"].append(r)
+        for a in cur.execute("SELECT * FROM mcp.aliases ORDER BY fuente, texto").fetchall():
+            found[a["cliente_id"]]["aliases"].append(a)
+    return list(found.values())
+
+
+def rows_without_client(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"SELECT i.*, s.title AS source_title, t.name AS tab_name {ISSUE_FROM}"
+            " WHERE i.issue_type = 'alias_sin_cliente' AND i.status IN ('abierto', 'reabierto')"
+            " ORDER BY s.title, t.name, i.details ->> 'text', i.id"
+        ).fetchall()

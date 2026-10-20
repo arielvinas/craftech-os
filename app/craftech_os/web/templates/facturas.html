@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_color.html" import swatch %}
+{% block title %}Facturas{% endblock %}
+{% block content %}
+<h1>Facturas y cobros de {{ f.mes.strftime("%Y-%m") }}</h1>
+<form method="get" action="/facturas" class="filters">
+  <label>Mes
+    <select name="mes">
+      {% if f.mes not in months %}<option value="{{ f.mes.strftime('%Y-%m') }}" selected>{{ f.mes.strftime("%Y-%m") }}</option>{% endif %}
+      {% for m in months %}<option value="{{ m.strftime('%Y-%m') }}" {% if f.mes == m %}selected{% endif %}>{{ m.strftime("%Y-%m") }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Estado
+    <select name="estado">
+      <option value="">Todos</option>
+      {% for s in states %}<option value="{{ s }}" {% if f.estado == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Entidad legal
+    <select name="entidad">
+      <option value="">Todas</option>
+      {% for e in entities %}<option value="{{ e }}" {% if f.entidad == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Cliente
+    <select name="cliente">
+      <option value="">Todos</option>
+      {% for id, name in clients %}<option value="{{ id }}" {% if f.cliente == id %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit">Filtrar</button>
+  <a href="/facturas">Limpiar</a>
+</form>
+
+<h2>Paridad con la planilla</h2>
+{% if parity %}
+<table>
+  <thead><tr><th>Planilla › pestaña</th><th>Total de la planilla</th><th>Suma de facturas</th><th>Diferencia</th></tr></thead>
+  <tbody>
+    {% for r in parity %}
+    <tr>
+      <td>{{ r.planilla }} › {{ r.pestaña }}</td>
+      <td class="num">{{ r.total_planilla | money }}</td>
+      <td class="num">{{ r.suma_facturas | money }}</td>
+      <td class="num{% if r.diferencia %} parity-off{% endif %}">{{ r.diferencia | money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay totales ni facturas para este mes.</p>
+{% endif %}
+
+<h2>Facturas</h2>
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Cliente</th><th>Razón social</th><th>Entidad legal</th><th>Estado</th><th>Monto</th>
+      <th>Neto ARS</th><th>Vencimiento</th><th>Cobro</th><th>Origen</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{% if r.cliente %}{{ r.cliente }}{% else %}<span class="warning">sin cliente</span> {{ r.clave_fila }}{% endif %}</td>
+      <td>{{ r.razon_social or "—" }}</td>
+      <td>{{ r.entidad_legal }}</td>
+      <td class="estado-{{ r.estado | replace(' ', '-') }}">{{ swatch(colors[r.estado]) }} {{ r.estado }}</td>
+      <td class="num">{{ r.monto | money }} {{ r.moneda }}</td>
+      <td class="num">{{ r.neto_ars | money }}</td>
+      <td>{{ r.vencimiento or "—" }}</td>
+      <td>{% if r.cobro_origen %}{{ r.cobro_fecha | when }} ({{ r.cobro_certeza or r.cobro_origen }}){% else %}—{% endif %}</td>
+      <td><a href="https://docs.google.com/spreadsheets/d/{{ r.drive_id }}/edit#gid={{ r.sheet_id }}&amp;range={{ r.celda }}">{{ r.planilla }} › {{ r.pestaña }} › {{ r.celda }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay facturas con estos filtros.</p>
+{% endif %}
+{% endblock %}
