@@ -111,8 +111,8 @@ def test_load_aliases_is_idempotent_and_creates_a_missing_client(env, db, tmp_pa
         " JOIN client c ON c.id = a.client_id ORDER BY a.id"
     ).fetchall()
     assert aliases == [
-        ("Cobros", "ficticia uno", "Ficticia Uno LLC", "Ariel", "es el mismo cliente"),
-        ("Pagos", "cliente nuevo", "Cliente Nuevo", "Ariel", "nombre de fantasía"),
+        ("cobros", "ficticia uno", "Ficticia Uno LLC", "Ariel", "es el mismo cliente"),
+        ("pagos", "cliente nuevo", "Cliente Nuevo", "Ariel", "nombre de fantasía"),
     ]
     assert not any(name in out + str(_events(db, "aliases_loaded")) for name in NAMES)
 
@@ -125,7 +125,7 @@ def test_the_latest_alias_decision_wins_and_keeps_the_earlier_one(env, db, tmp_p
     assert db.execute("SELECT count(*) FROM client_alias").fetchone() == (2,)
     assert db.execute(
         "SELECT fuente, texto, cliente, decidio, motivo, decisiones_anteriores FROM mcp.aliases"
-    ).fetchall() == [("Cobros", "uno", "Ejemplo Tres", "Emi", "lo corrigió Emi", 1)]
+    ).fetchall() == [("cobros", "uno", "Ejemplo Tres", "Emi", "lo corrigió Emi", 1)]
 
 
 def test_an_alias_row_without_who_or_why_loads_nothing(env, db, tmp_path, capsys):

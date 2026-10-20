@@ -37,17 +37,22 @@ def find(doc: dict, schema: dict | None) -> list[tuple[str, str, dict]]:
                 if cell.get("bg") not in KNOWN_COLORS:
                     colors.setdefault(cell["bg"], []).append(ref)
                 if "stringValue" in (cell.get("value") or {}) and (value(cell) or "").strip():
-                    where = row["key"] or f"fila {row['r'] + 1}"
-                    if row["ordinal"] and row["ordinal"] > 1:
-                        # Rule R26: a repeated key is another series of the same client.
-                        where += f" ({row['ordinal']})"
-                    column = value(header.get(c)) or column_letters(c)
-                    found.append(("valor_ilegible", f"{block}:{where}:{column}", {"cell_ref": ref}))
+                    found.append(unreadable(block, row, header, c))
     found += [
         ("color_desconocido", color, {"cells": len(refs), "sample": refs[:SAMPLE_REFS]})
         for color, refs in sorted(colors.items())
     ]
     return found
+
+
+def unreadable(block: str, row: dict, header: dict, c: int) -> tuple[str, str, dict]:
+    """The valor_ilegible problem of the cell of this row in column c."""
+    where = row["key"] or f"fila {row['r'] + 1}"
+    if row["ordinal"] and row["ordinal"] > 1:
+        # Rule R26: a repeated key is another series of the same client.
+        where += f" ({row['ordinal']})"
+    column = value(header.get(c)) or column_letters(c)
+    return "valor_ilegible", f"{block}:{where}:{column}", {"cell_ref": a1(row["r"], c)}
 
 
 def upsert(

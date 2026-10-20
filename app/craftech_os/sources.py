@@ -6,6 +6,7 @@ import psycopg
 import yaml
 
 from craftech_os.diff.compare import column_index
+from craftech_os.interpret import INTERPRETERS
 
 CLASSES = ("CARGA", "DERIVADA", "HISTORICA", "IGNORAR", "A_CONFIRMAR", "SIN_CLASIFICAR")
 SOURCES_FILE = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
@@ -139,6 +140,11 @@ def parse(text: str) -> list[dict]:
             if name not in seen:
                 raise SourcesError(f"{title!r}: schema for {name!r}, a tab not listed in 'tabs'")
             _schema(schema, f"{title!r} schema of {name!r}")
+        for name, cls in tabs:
+            if cls == "CARGA" and name in INTERPRETERS and "grid" not in schemas.get(name, {}):
+                raise SourcesError(
+                    f"{title!r}: {name!r} is interpreted and needs a schema with 'grid'"
+                )
         result.append(
             {
                 "title": title,

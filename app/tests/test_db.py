@@ -8,6 +8,7 @@ from craftech_os import cli, sources
 from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 
 TABLES = [
+    "accrual",
     "annotation",
     "cell_change",
     "client",
@@ -15,6 +16,7 @@ TABLES = [
     "client_legal_entity",
     "drive_activity",
     "editor_profile",
+    "fx_rate",
     "issue",
     "issue_resolution",
     "legal_entity",
@@ -34,6 +36,7 @@ MIGRATIONS = [
     "0006_mcp_roles_views.sql",
     "0007_mcp_cells.sql",
     "0008_clients.sql",
+    "0009_accruals_fx.sql",
 ]
 
 
