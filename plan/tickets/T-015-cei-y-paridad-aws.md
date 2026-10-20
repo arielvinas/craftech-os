@@ -1,7 +1,7 @@
 ---
 id: T-015
 title: "Fundings: el programa CEI como hito y paridad contra \"TOTAL PAGOS AWS\""
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: []
