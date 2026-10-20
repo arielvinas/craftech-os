@@ -414,6 +414,21 @@ def test_an_amount_typed_in_the_row_that_opens_a_block_is_a_problem_not_lost(db,
     assert opened == [("General:general:D", {"block": "General", "cell_ref": "D4"})]
 
 
+def test_a_cei_row_outside_general_is_a_problem_not_a_milestone(db, env, fake):
+    pagos = [row[:] for row in PAGOS]
+    pagos[6] = ["Funding de AWS confirmados", "CEI", "CEI", "8000"]
+    _set(fake, 11, pagos)
+    _import(env)
+    assert "CEI" not in {r[3] for r in _fundings(db, "pagos")}
+    opened = [(k, d) for k, d in _issues(db, "fila_sin_interpretar") if k.startswith("Funding")]
+    assert opened == [
+        (
+            "Funding de AWS confirmados:funding de aws confirmados:D",
+            {"block": "Funding de AWS confirmados", "cell_ref": "D7"},
+        )
+    ]
+
+
 def _months(*days):
     return [_month((d - EPOCH).days, d.strftime("%b %Y")) for d in days]
 
