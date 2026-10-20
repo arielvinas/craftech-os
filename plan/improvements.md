@@ -43,3 +43,4 @@
 - [ ] [bug] /problemas: ISSUE_TYPES en web/app.py tiene solo los 4 tipos originales; filtrar por alias_sin_cliente, funding_duplicado y los demás tipos de la migración 0009 da 400 — T-014
 - [ ] [tests] Fundings: ningún test cubre que un funding_duplicado ya resuelto deje de marcarse como duplicado — QA T-014 r1 (F1)
 - [ ] [ui] Mes por defecto de /facturas usa la fecha del sistema, no la zona horaria de Craftech — QA T-014 r1 (F2)
+- [ ] [robustez] client_rows puede dar 500 si se agrega un cliente durante la carga de la página — QA T-014 r1 (F3)
