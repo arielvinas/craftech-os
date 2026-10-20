@@ -13,6 +13,7 @@ from test_diff_store import _value
 from test_import import FakeGoogle, _tab
 
 from craftech_os import cli, interpret
+from craftech_os.diff.compare import BEFORE_HEADER
 from craftech_os.migrate import migrate
 
 SOURCES = """
@@ -50,9 +51,13 @@ sources:
 JAN, FEB, MAR = date(2025, 1, 1), date(2025, 2, 1), date(2025, 3, 1)
 
 
-def _month(serial, label):
+def _month(serial, label, pattern="mmmm yyyy"):
     """A header cell holding a date, as Google returns it: a serial number shown as a month."""
-    return {"effectiveValue": {"numberValue": serial}, "formattedValue": label}
+    return {
+        "effectiveValue": {"numberValue": serial},
+        "formattedValue": label,
+        "effectiveFormat": {"numberFormat": {"pattern": pattern}},
+    }
 
 
 MONTHS = [_month(45658, "ene 2025"), _month(45689, "feb 2025"), _month(45717, "mar 2025")]
@@ -359,3 +364,73 @@ def test_events_count_facts_and_time_and_nothing_carries_amounts(db, env, fake):
     details = [d for (d,) in db.execute("SELECT details FROM issue")]
     logged = json.dumps([d for _, d in events] + details)
     assert not any(amount in logged for amount in AMOUNTS + ["1199.75"])
+
+
+def test_a_repeated_month_column_is_a_problem_and_the_read_goes_on(db, env, fake):
+    # Someone copies the February column next to it to start a new one.
+    repeated = [MONTHS[0], MONTHS[1], MONTHS[1]]
+    _set(fake, 11, [VENTAS[0], [*VENTAS[1][:4], *repeated, "Ventas 2025"], *VENTAS[2:]])
+    _set(fake, 12, [PAGOS_ARG[0], ["Mes", *repeated], *PAGOS_ARG[2:]])
+    _import(env)
+    assert db.execute("SELECT count(*) FROM snapshot").fetchone() == (4,)
+    rows = _accruals(db)
+    assert [(r[3], r[7]) for r in rows if r[1] == "cliente uno"] == [(JAN, "E3"), (FEB, "F3")]
+    assert ("Cliente:cliente uno:G", {"block": "Cliente", "cell_ref": "G3"}) in _issues(
+        db, "fila_sin_interpretar"
+    )
+    assert db.execute(
+        "SELECT celda FROM mcp.cotizaciones WHERE tipo = 'mep' ORDER BY mes"
+    ).fetchall() == [("B6",), ("C6",)]
+    unplaced = [key for key, _ in _issues(db, "fila_sin_interpretar") if key.endswith(":D")]
+    assert unplaced == [f"{BEFORE_HEADER}:dolar oficial:D", "Mes:mep (2):D", "Mes:mep:D"]
+
+
+def test_a_row_whose_text_ends_like_a_series_suffix_is_its_own_row(db, env, fake):
+    _set(fake, 11, [*VENTAS[:5], ["Cliente Uno (2)", "Servicio", "Cloud", "Pod Norte", "11"]])
+    _import(env)
+    rows = [(r[1], r[2], r[4]) for r in _accruals(db) if r[3] == JAN]
+    assert ("cliente uno (2)", 2, Decimal("71234")) in rows
+    assert ("cliente uno (2)", 1, Decimal("11")) in rows
+
+
+def test_an_error_in_a_grid_cell_is_unreadable(db, env, fake):
+    broken = {"effectiveValue": {"errorValue": {"type": "REF"}}, "formattedValue": "#REF!"}
+    _set(fake, 11, [*VENTAS[:3], [*VENTAS[3][:5], broken, "0"], *VENTAS[4:]])
+    broken_rate = [*PAGOS_ARG[:5], ["MEP", "1187.25", broken, "1209.25"], *PAGOS_ARG[6:]]
+    _set(fake, 12, broken_rate)
+    _import(env)
+    unreadable = _issues(db, "valor_ilegible")
+    assert ("Cliente:cliente dos:feb 2025", {"cell_ref": "F4"}) in unreadable
+    assert ("Mes:mep (2):feb 2025", {"cell_ref": "C6"}) in unreadable
+    assert ("mep", FEB, Decimal("1198.25"), False) not in _rates(db)
+
+
+def test_a_ventas_tab_without_schema_or_not_carga_is_not_touched(db, env, fake):
+    _import(env)
+    (tab, snapshot, schema) = db.execute(
+        "SELECT t.id, n.id, t.schema FROM source_tab t JOIN snapshot n ON n.source_tab_id = t.id"
+        " JOIN source s ON s.id = t.source_id"
+        " WHERE t.name = 'VENTAS' AND s.title = 'Cobranzas Ficticias'"
+    ).fetchone()
+    before = _accruals(db)
+    db.execute("UPDATE source_tab SET schema = NULL WHERE id = %s", (tab,))
+    assert interpret.run(db, snapshot) is None
+    db.execute(
+        "UPDATE source_tab SET schema = %s, class = 'HISTORICA' WHERE id = %s",
+        (json.dumps(schema), tab),
+    )
+    assert interpret.run(db, snapshot) is None
+    assert _accruals(db) == before
+
+
+def test_a_header_number_that_is_not_a_date_is_not_a_month(db, env, fake):
+    mid_january = _month(45672, "15 ene 2025", "d mmm yyyy")
+    year = {"effectiveValue": {"numberValue": 2025}, "formattedValue": "2025"}
+    header = [*VENTAS[1][:4], mid_january, year, MONTHS[2], "Ventas 2025"]
+    _set(fake, 11, [VENTAS[0], header, *VENTAS[2:]])
+    _import(env)
+    rows = _accruals(db)
+    assert {r[3] for r in rows} == {JAN, MAR}
+    assert ("Cliente:cliente uno:F", {"block": "Cliente", "cell_ref": "F3"}) in _issues(
+        db, "fila_sin_interpretar"
+    )

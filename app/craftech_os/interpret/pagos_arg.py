@@ -5,22 +5,35 @@ is the operational one; earlier MEP rows are controls checked against it (rule R
 Problems carry cell references and months, never values.
 """
 
-from craftech_os.diff.compare import a1
+from craftech_os.diff.compare import a1, column_letters
 from craftech_os.interpret.cells import grid, number, unreadable
 from craftech_os.issues import detect
 
 ROWS = {"mep": "mep", "dolar oficial": "oficial"}
 
 
-def _rates(block: str, row: dict, header: dict, months: dict, issues: list) -> dict:
-    """{month: (value, cell_ref)} of a rate row; a cell that is not a number is a problem."""
+def _rates(block: str, row: dict, header: dict, columns, months: dict, issues: list) -> dict:
+    """{month: (value, cell_ref)} of a rate row.
+
+    A cell that is not a number, or a rate in a column without a month of its own, is a problem.
+    """
     rates = {}
-    for c, month in months.items():
+    for c in columns:
         cell = row["cells"].get(c)
         if cell is None:
             continue
         if (rate := number(cell)) is not None:
-            rates[month] = (rate, a1(row["r"], c))
+            if c in months:
+                rates[months[c]] = (rate, a1(row["r"], c))
+            else:
+                where = row["key"] if row["ordinal"] == 1 else f"{row['key']} ({row['ordinal']})"
+                issues.append(
+                    (
+                        "fila_sin_interpretar",
+                        f"{block}:{where}:{column_letters(c)}",
+                        {"block": block, "cell_ref": a1(row["r"], c)},
+                    )
+                )
         elif unreadable(cell):
             issues.append(detect.unreadable(block, row, header["cells"], c))
     return rates
@@ -31,13 +44,13 @@ def interpret(doc: dict, schema: dict) -> tuple[dict, list[tuple[str, str, dict]
     found = grid(doc, schema)
     if found is None:
         return {"fx_rate": []}, [("fila_sin_interpretar", "sin encabezado", {})]
-    tab_blocks, header, _, months = found
+    tab_blocks, header, columns, months = found
     issues = []
     rows = {rate_type: [] for rate_type in ROWS.values()}
     for block, block_rows in tab_blocks:
         for row in block_rows:
             if row["key"] in ROWS:
-                rows[ROWS[row["key"]]].append(_rates(block, row, header, months, issues))
+                rows[ROWS[row["key"]]].append(_rates(block, row, header, columns, months, issues))
     facts = []
     for rate_type, found_rows in rows.items():
         if not found_rows:

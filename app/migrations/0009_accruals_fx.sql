@@ -17,7 +17,7 @@ CREATE TABLE accrual (
     snapshot_id   bigint NOT NULL REFERENCES snapshot (id),
     cell_ref      text NOT NULL,
     rules_version text NOT NULL,
-    UNIQUE (source_tab_id, block, row_key, month)
+    UNIQUE (source_tab_id, block, alias_text, series_order, month)
 );
 
 COMMENT ON TABLE accrual IS 'Devengado: lo que se le vende a un cliente en un mes, una fila de cliente por una columna de mes de VENTAS, con el monto tal como está en la celda. Se reemplaza entero en cada lectura nueva de la pestaña.';

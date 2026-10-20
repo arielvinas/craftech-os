@@ -10,9 +10,12 @@ EPOCH = date(1899, 12, 30)
 
 
 def month(cell: dict | None) -> date | None:
-    """The first day of the month of a header cell holding a date, else None."""
+    """The first day of the month of a header cell holding a date, else None.
+
+    A date is a number shown with a year; a plain number such as 2025 is not one.
+    """
     serial = ((cell or {}).get("value") or {}).get("numberValue")
-    if serial is None:
+    if serial is None or "yy" not in (cell.get("format") or "").lower():
         return None
     return (EPOCH + timedelta(days=int(serial))).replace(day=1)
 
@@ -29,7 +32,10 @@ def unreadable(cell: dict) -> bool:
 
 
 def grid(doc: dict, schema: dict):
-    """(blocks, header row cells, grid columns, {column: month}), or None without header."""
+    """(blocks, header row cells, grid columns, {column: month}), or None without header.
+
+    A month repeated in the header belongs to its first column only.
+    """
     split = blocks(doc, schema)
     if split is None:
         return None
@@ -37,5 +43,8 @@ def grid(doc: dict, schema: dict):
     first, last = (column_index(x) for x in schema["grid"].split(":"))
     header = next(row for _, rows in tab_blocks for row in rows if row["r"] == header_r)
     columns = range(first, last + 1)
-    months = {c: m for c in columns if (m := month(header["cells"].get(c)))}
+    months = {}
+    for c in columns:
+        if (m := month(header["cells"].get(c))) and m not in months.values():
+            months[c] = m
     return tab_blocks, header, columns, months
