@@ -33,3 +33,4 @@
 - [ ] [docs] README.md:109 dice que una celda vacía con solo color no se guarda; ya no es cierto en las pestañas CARGA con esquema — QA T-009 r3
 - [ ] [robustez] Una excepción que no sea psycopg.DataError dentro de la transacción de la lectura (store.record o interpret.run: IntegrityError, TypeError) termina el worker y lo deja en un ciclo de caídas sobre la misma planilla; el importer debería registrar tab_failed y seguir — QA T-010 r1 (split-out de F1)
 - [x] [robustez] Un número fuera del rango de fechas en una celda de mes del encabezado (p.ej. 99999999) tira OverflowError en interpret/cells.py y frena el worker — QA T-010 r2 (F1); misma clase que QA T-010 r1
+- [ ] [test-gap] `shows_amount` sin test para texto con dígitos ("pagado 2/3") tipeado sobre un monto — QA T-011 r2 (plan/qa/T-011-round-2.md)
