@@ -53,7 +53,7 @@ COLUMNS = {
         "alias_text",
         "cell_ref",
     ),
-    "payment": ("block", "row_key", "month", "legal_entity", "cell_change_id"),
+    "payment": ("block", "row_key", "series_order", "month", "legal_entity", "cell_change_id"),
     "client_churn": (
         "block",
         "row_key",

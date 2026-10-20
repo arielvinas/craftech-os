@@ -344,6 +344,8 @@ def test_an_arg_invoice_has_gross_net_rate_and_inferred_usd(db, env, fake):
 
 
 def test_parity_is_zero_with_consistent_data_and_shows_a_missing_invoice(db, env, fake):
+    # Sheets adds in binary floating point: a total off by a millionth still closes.
+    _set(fake, 11, _edit(PAGOS, 0, 3, "6300.000001"))
     _import(env)
 
     def parity(planilla, tab):
@@ -406,3 +408,84 @@ def test_interpret_twice_leaves_the_same_facts_and_nothing_logs_amounts(db, env,
     assert sorted((d["invoices"], d["payments"], d["churn"]) for d in events)[-1] == (8, 1, 0)
     logged = json.dumps(events + [d for (d,) in db.execute("SELECT details FROM issue")])
     assert not any(amount in logged or amount in out for amount in AMOUNTS)
+
+
+def test_a_row_whose_text_ends_in_a_number_is_not_mixed_with_a_series(db, env, fake):
+    literal = ["Cliente Uno (2)", "Alguien", "Servicio", _value("3100", GREEN)]
+    _set(fake, 11, [*PAGOS[:7], literal, *PAGOS[7:]])
+    _import(env)
+    rows = db.execute(
+        "SELECT clave_fila, serie, mes, monto, celda FROM mcp.facturas"
+        " WHERE pestaña = 'Pagos' AND planilla = 'Facturación Ficticia' AND mes = %s"
+        " AND clave_fila LIKE 'cliente uno%%' ORDER BY celda",
+        (JAN,),
+    ).fetchall()
+    assert rows == [
+        ("cliente uno", 1, JAN, Decimal("1100"), "D3"),
+        ("cliente uno (2)", 2, JAN, Decimal("2100"), "D7"),
+        ("cliente uno (2)", 1, JAN, Decimal("3100"), "D8"),
+    ]
+    _set(fake, 11, [*_edit(PAGOS, 6, 3, _value("2100", GREEN))[:7], literal, *PAGOS[7:]])
+    _import(env)
+    (change,) = db.execute(
+        "SELECT id FROM cell_change WHERE change_type = 'color' AND cell_ref = 'D7'"
+    ).fetchone()
+    paid = db.execute(
+        "SELECT celda, cambio_id FROM mcp.cobros WHERE clave_fila = 'cliente uno (2)' ORDER BY 1"
+    ).fetchall()
+    assert paid == [("D7", change), ("D8", None)]
+
+
+def test_a_zero_or_a_text_over_an_amount_shows_in_the_history(db, env, fake):
+    _import(env)
+    _set(fake, 11, _edit(_edit(PAGOS, 2, 4, _value("pendiente", BLUE)), 2, 5, _value("0", ORANGE)))
+    _import(env)
+    assert [r[4] for r in _invoices(db) if r[0] == "cliente uno"] == ["D3"]
+    changes = db.execute(
+        "SELECT celda, estado_anterior, estado_nuevo FROM mcp.cambios_de_estado_de_factura"
+        " ORDER BY celda"
+    ).fetchall()
+    assert changes == [("E3", "confirmada", "sin factura"), ("F3", "enviada", "sin factura")]
+    # A zero typed where there was nothing is not an invoice either way.
+    _set(fake, 11, _edit(PAGOS, 6, 4, _value("0", BLUE)))
+    _import(env)
+    assert "E7" not in [
+        r[0] for r in db.execute("SELECT celda FROM mcp.cambios_de_estado_de_factura")
+    ]
+
+
+def test_an_amount_typed_into_a_green_cell_is_the_payment_change(db, env, fake):
+    _set(fake, 11, _edit(PAGOS, 6, 4, _value(None, GREEN)))
+    _import(env)
+    _set(fake, 11, _edit(PAGOS, 6, 4, _value("2200", GREEN)))
+    _import(env)
+    (change,) = db.execute(
+        "SELECT id FROM cell_change WHERE change_type = 'value' AND cell_ref = 'E7'"
+    ).fetchone()
+    assert ("cliente uno (2)", FEB, "E7", WINDOW_END, "ventana de detección", change) in _payments(
+        db
+    )
+
+
+@pytest.mark.parametrize("formula", ["=ROUND(50*1.21*B7)", "=50*1.21*B7+0"])
+def test_an_arg_formula_that_is_not_a_plain_product_still_reads_its_rate(db, env, fake, formula):
+    _set(fake, 12, _edit(PAGOS_ARG, 3, 1, _formula(54450, formula)))
+    _import(env)
+    (row,) = db.execute(
+        "SELECT cotizacion, usd_inferido FROM mcp.facturas WHERE pestaña = 'Pagos ARG'"
+        " AND celda = 'B4'"
+    ).fetchall()
+    assert row == (Decimal("900"), None)
+
+
+def test_an_arg_formula_with_two_references_opens_a_problem(db, env, fake):
+    _set(fake, 12, _edit(PAGOS_ARG, 3, 1, _formula(54450, "=50*1.21*(B7+B6)/2")))
+    _import(env)
+    (row,) = db.execute(
+        "SELECT cotizacion, usd_inferido FROM mcp.facturas WHERE pestaña = 'Pagos ARG'"
+        " AND celda = 'B4'"
+    ).fetchall()
+    assert row == (None, None)
+    assert ("Mes:cliente divisa:ene 2025", {"cell_ref": "B4"}) in _issues(
+        db, "cotizacion_tipo_a_confirmar"
+    )

@@ -30,7 +30,7 @@ STATES = {
 assert set(STATES) == detect.KNOWN_COLORS
 PAID, SENT = "#d9ead3", "#ff9900"
 IVA = Decimal("1.21")
-REFERENCE = re.compile(r"([A-Z]+)(\d+)")
+REFERENCE = re.compile(r"\$?\b([A-Z]+)\$?(\d+)\b")
 
 
 def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str, str, dict]]]:
@@ -73,7 +73,8 @@ def _interpret(doc: dict, schema: dict, legal_entity: str, total_key: str, churn
                 issues.append(detect.unreadable(block, row, header["cells"], c))
                 continue
             if "!" in (cell.get("formula") or ""):
-                # A copy of another tab, such as Pagos ARG in Pagos: invoiced there.
+                # A copy of another tab, such as Pagos ARG in Pagos: invoiced there. In the real
+                # sheets the only such formulas are the row 15 copies in SleakOps Pagos.
                 continue
             bg = cell.get("bg")
             if not amount:
@@ -153,25 +154,26 @@ def _rate(cell: dict, by_r: dict, block: str, row: dict, header: dict, c: int, i
     """Rule R10: the rate of an ARG invoice, from the row its formula references.
 
     A formula is read as a product such as =7200*1.21*M$1: the reference is the rate, the
-    number left after one 1.21 is the base in USD. A rate typed in the formula or a typed
-    amount opens cotizacion_tipeada (rule R38). Anything else leaves the rate unknown.
+    number left after one 1.21 is the base in USD; any other formula with one reference gives
+    the rate without a base. A rate typed in the formula or a typed amount opens
+    cotizacion_tipeada (rule R38); several references open cotizacion_tipo_a_confirmar.
     """
     unknown = {"fx_rate": None, "fx_rate_type": None, "fx_rate_to_confirm": False}
+    references = REFERENCE.findall(cell.get("formula") or "")
     formula = re.sub(r"[=$()\s]", "", cell.get("formula") or "")
-    factors = formula.split("*") if formula else []
-    references = [f for f in factors if REFERENCE.fullmatch(f)]
     numbers = []
-    for factor in factors:
-        if factor in references:
+    for factor in formula.split("*") if formula else []:
+        if REFERENCE.fullmatch(factor):
             continue
         try:
             numbers.append(Decimal(factor))
         except InvalidOperation:
-            return {**unknown, "inferred_usd": None}
-    if IVA in numbers:
+            numbers = None
+            break
+    if numbers and IVA in numbers:
         numbers.remove(IVA)
     if len(references) == 1:
-        letters, digits = REFERENCE.fullmatch(references[0]).groups()
+        letters, digits = references[0]
         source = by_r.get(int(digits) - 1)
         rate = number((source or {"cells": {}})["cells"].get(column_index(letters)) or {})
         key = (source or {}).get("key")
@@ -183,13 +185,14 @@ def _rate(cell: dict, by_r: dict, block: str, row: dict, header: dict, c: int, i
             "fx_rate": rate,
             "fx_rate_type": rate_type,
             "fx_rate_to_confirm": rate_type != "mep",
-            "inferred_usd": numbers[0] if len(numbers) == 1 else None,
+            "inferred_usd": numbers[0] if numbers and len(numbers) == 1 else None,
         }
-    if references:
-        return {**unknown, "inferred_usd": None}
     _, where, details = detect.unreadable(block, row, header["cells"], c)
+    if references:
+        issues.append(("cotizacion_tipo_a_confirmar", where, details))
+        return {**unknown, "inferred_usd": None}
     issues.append(("cotizacion_tipeada", where, details))
-    if len(numbers) == 2:
+    if numbers and len(numbers) == 2:
         return {
             "fx_rate": numbers[1],
             "fx_rate_type": "tipeada",
@@ -203,8 +206,8 @@ def link(conn: psycopg.Connection, tab_id: int, snapshot_id: int, facts: dict) -
     """Point each invoice at the last change that painted it orange, and add one payment per
     paid invoice pointing at the last change that painted it green (rule R4).
 
-    Changes are matched by block, row key, series and month, never by cell: rows move.
-    A change is a repaint, or an amount typed into an empty cell of that color.
+    Changes are matched by block, row text, series and month, never by cell: rows move.
+    A change is a repaint, or an amount typed where there was none in a cell of that color.
     """
     docs = {}
     last = {}
@@ -213,7 +216,8 @@ def link(conn: psycopg.Connection, tab_id: int, snapshot_id: int, facts: dict) -
         SELECT c.id, c.to_snapshot, c.block, c.row_key, c.row_ordinal, c.cell_ref, c.new_color
         FROM cell_change c
         WHERE c.source_tab_id = %s AND c.to_snapshot <= %s AND c.new_color IN (%s, %s)
-          AND (c.change_type = 'color' OR (c.change_type = 'value' AND c.old_value IS NULL))
+          AND (c.change_type = 'color' OR (c.change_type = 'value'
+               AND NOT shows_amount(c.old_value) AND shows_amount(c.new_value)))
         ORDER BY c.id
         """,
         (tab_id, snapshot_id, PAID, SENT),
@@ -227,17 +231,17 @@ def link(conn: psycopg.Connection, tab_id: int, snapshot_id: int, facts: dict) -
             docs[to_snapshot] = (grid(doc, schema) or (None, None, None, {}))[3]
         month = docs[to_snapshot].get(column_index(re.sub(r"\d+$", "", ref)))
         if month is not None and key is not None:
-            row_key = key if ordinal == 1 else f"{key} ({ordinal})"
-            last[(color, block, row_key, month)] = change_id
+            last[(color, block, key, ordinal, month)] = change_id
     facts["payment"] = []
     for invoice in facts["invoice"]:
-        where = (invoice["block"], invoice["row_key"], invoice["month"])
+        where = (invoice["block"], invoice["alias_text"], invoice["series_order"], invoice["month"])
         invoice["sent_change_id"] = last.get((SENT, *where))
         if invoice["state"] == "pagada":
             facts["payment"].append(
                 {
                     "block": invoice["block"],
                     "row_key": invoice["row_key"],
+                    "series_order": invoice["series_order"],
                     "month": invoice["month"],
                     "legal_entity": invoice["legal_entity"],
                     "cell_change_id": last.get((PAID, *where)),

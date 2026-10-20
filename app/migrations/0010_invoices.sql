@@ -11,6 +11,13 @@ $$;
 
 COMMENT ON FUNCTION a1_column(text) IS 'Columna de una celda en notación A1, contada desde 0 (A = 0, AA = 26).';
 
+CREATE FUNCTION shows_amount(shown text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+    SELECT coalesce(shown ~ '[1-9]' AND regexp_replace(shown, 'USD|ARS', '', 'g') !~ '[[:alpha:]]',
+                    false)
+$$;
+
+COMMENT ON FUNCTION shows_amount(text) IS 'Si el valor mostrado de una celda es un monto distinto de 0 (ej. "USD $1,200"), o sea una factura según la regla R30; falso si está vacía, es 0 o es un texto.';
+
 CREATE FUNCTION invoice_state(color text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
     SELECT CASE lower(coalesce(color, '#ffffff'))
         WHEN '#ffffff' THEN 'a facturar'
@@ -48,7 +55,8 @@ CREATE TABLE invoice (
     snapshot_id        bigint NOT NULL REFERENCES snapshot (id),
     cell_ref           text NOT NULL,
     rules_version      text NOT NULL,
-    UNIQUE (source_tab_id, block, row_key, month),
+    -- The text and its order, not row_key: a row typed "x (2)" is not the second "x".
+    UNIQUE (source_tab_id, block, alias_text, series_order, month),
     CHECK ((currency = 'ARS') = (net_ars IS NOT NULL))
 );
 
@@ -80,12 +88,13 @@ CREATE TABLE payment (
     source_tab_id  bigint NOT NULL REFERENCES source_tab (id),
     block          text NOT NULL,
     row_key        text NOT NULL,
+    series_order   integer NOT NULL CHECK (series_order >= 1),
     month          date NOT NULL CHECK (extract(day FROM month) = 1),
     legal_entity   text NOT NULL REFERENCES legal_entity (name),
     cell_change_id bigint REFERENCES cell_change (id),
     snapshot_id    bigint NOT NULL REFERENCES snapshot (id),
     rules_version  text NOT NULL,
-    UNIQUE (source_tab_id, block, row_key, month)
+    UNIQUE (source_tab_id, block, row_key, series_order, month)
 );
 
 COMMENT ON TABLE payment IS 'Cobro: uno por cada factura pagada (celda verde, regla R4), con la clave de la factura. La fecha y el autor no se copian: salen del cambio de celda en mcp.cobros. Se reemplaza entero en cada lectura nueva de la pestaña.';
@@ -93,9 +102,10 @@ COMMENT ON COLUMN payment.id IS 'Identificador interno; cambia en cada reinterpr
 COMMENT ON COLUMN payment.source_tab_id IS 'Pestaña de la factura.';
 COMMENT ON COLUMN payment.block IS 'Bloque de la factura.';
 COMMENT ON COLUMN payment.row_key IS 'Clave de fila de la factura, con sufijo de orden si se repite.';
+COMMENT ON COLUMN payment.series_order IS 'Orden de la fila de la factura entre las que tienen el mismo texto en el bloque.';
 COMMENT ON COLUMN payment.month IS 'Mes de la factura.';
 COMMENT ON COLUMN payment.legal_entity IS 'Sociedad que facturó.';
-COMMENT ON COLUMN payment.cell_change_id IS 'Último cambio de celda que la pintó de verde, buscado por pestaña, bloque, clave de fila y mes (las filas se mueven); nulo si ya estaba verde en la primera lectura o el cambio no se vio.';
+COMMENT ON COLUMN payment.cell_change_id IS 'Último cambio de celda que la pintó de verde, buscado por pestaña, bloque, clave de fila, serie y mes (las filas se mueven); nulo si ya estaba verde en la primera lectura o el cambio no se vio.';
 COMMENT ON COLUMN payment.snapshot_id IS 'Lectura de la que sale.';
 COMMENT ON COLUMN payment.rules_version IS 'Versión de las reglas con las que se interpretó.';
 
@@ -113,7 +123,7 @@ CREATE TABLE client_churn (
     snapshot_id      bigint NOT NULL REFERENCES snapshot (id),
     cell_ref         text NOT NULL,
     rules_version    text NOT NULL,
-    UNIQUE (source_tab_id, block, row_key, month)
+    UNIQUE (source_tab_id, block, alias_text, series_order, month)
 );
 
 COMMENT ON TABLE client_churn IS 'Baja: una celda pintada sin monto (vacía o 0) en la grilla de Pagos de SleakOps (regla R31). Se reemplaza entera en cada lectura nueva de la pestaña.';
@@ -237,7 +247,8 @@ SELECT f.planilla, f.pestaña, f.pestaña_id, f.lectura_id, f.celda, f.bloque, f
        p.cell_change_id AS cambio_id, p.rules_version AS version_reglas
 FROM payment p
 JOIN mcp.facturas f ON f.pestaña_id = p.source_tab_id AND f.lectura_id = p.snapshot_id
-    AND f.bloque = p.block AND f.clave_fila = p.row_key AND f.mes = p.month
+    AND f.bloque = p.block AND f.clave_fila = p.row_key AND f.serie = p.series_order
+    AND f.mes = p.month
 LEFT JOIN cell_change c ON c.id = p.cell_change_id;
 
 COMMENT ON VIEW mcp.cobros IS 'Cobros: uno por factura pagada (celda verde, regla R4) en la última lectura. La fecha y el autor salen del cambio de celda que la pintó de verde, así que la atribución de Drive que llega después se ve sin reinterpretar.';
@@ -304,10 +315,11 @@ SELECT c.id, s.title AS planilla, t.name AS pestaña, t.id AS pestaña_id, c.cel
        c.row_key || CASE WHEN c.row_ordinal > 1 THEN ' (' || c.row_ordinal || ')' ELSE '' END
            AS clave_fila,
        c.row_ordinal AS serie,
-       CASE WHEN c.change_type = 'value' THEN 'sin factura' ELSE invoice_state(c.old_color) END
-           AS estado_anterior,
-       CASE WHEN c.change_type = 'emptied' THEN 'sin factura' ELSE invoice_state(c.new_color) END
-           AS estado_nuevo,
+       CASE WHEN c.change_type = 'value' AND NOT shows_amount(c.old_value) THEN 'sin factura'
+            ELSE invoice_state(c.old_color) END AS estado_anterior,
+       CASE WHEN c.change_type = 'emptied'
+                 OR (c.change_type = 'value' AND NOT shows_amount(c.new_value)) THEN 'sin factura'
+            ELSE invoice_state(c.new_color) END AS estado_nuevo,
        c.old_value AS valor_anterior, c.new_value AS valor_nuevo,
        coalesce(c.attributed_at, c.window_end) AS fecha,
        c.attribution_certainty AS certeza,
@@ -321,11 +333,11 @@ JOIN source_tab t ON t.id = c.source_tab_id AND t.class = 'CARGA'
     AND t.name IN ('Pagos', 'Pagos ARG') AND c.block = t.schema ->> 'header'
 JOIN source s ON s.id = t.source_id
 WHERE (c.change_type IN ('color', 'emptied')
-       OR (c.change_type = 'value' AND c.old_value IS NULL))
+       OR (c.change_type = 'value' AND shows_amount(c.old_value) <> shows_amount(c.new_value)))
   AND a1_column(c.cell_ref) BETWEEN a1_column(split_part(t.schema ->> 'grid', ':', 1))
                                 AND a1_column(split_part(t.schema ->> 'grid', ':', 2));
 
-COMMENT ON VIEW mcp.cambios_de_estado_de_factura IS 'Historia de las celdas de factura de Pagos y Pagos ARG: cada cambio de color, cada celda vaciada y cada monto tipeado en una celda vacía, con el estado anterior y el nuevo según la regla R29, la fecha y quién lo hizo. Sale de los cambios de celda (mcp.changes), así que incluye las facturas que ya no existen.';
+COMMENT ON VIEW mcp.cambios_de_estado_de_factura IS 'Historia de las celdas de factura de Pagos y Pagos ARG: cada cambio de color, cada celda vaciada, cada monto tipeado donde no había factura y cada 0 o texto tipeado sobre un monto, con el estado anterior y el nuevo según la regla R29, la fecha y quién lo hizo. Sale de los cambios de celda (mcp.changes), así que incluye las facturas que ya no existen.';
 COMMENT ON COLUMN mcp.cambios_de_estado_de_factura.id IS 'Identificador del cambio (mcp.changes.id).';
 COMMENT ON COLUMN mcp.cambios_de_estado_de_factura.planilla IS 'Nombre de la planilla de Google Sheets.';
 COMMENT ON COLUMN mcp.cambios_de_estado_de_factura.pestaña IS 'Nombre de la pestaña: Pagos o Pagos ARG.';
