@@ -12,7 +12,7 @@ import pytest
 from test_diff_store import _value
 from test_import import FakeGoogle, _tab
 
-from craftech_os import cli, interpret
+from craftech_os import cli, interpret, sources
 from craftech_os.diff.compare import BEFORE_HEADER
 from craftech_os.interpret import cells
 from craftech_os.migrate import migrate
@@ -440,3 +440,19 @@ def test_a_header_number_that_is_not_a_date_is_not_a_month(db, env, fake):
 @pytest.mark.parametrize("serial", [99999999, -99999999])
 def test_a_header_date_out_of_range_is_not_a_month(serial):
     assert cells.month({"value": {"numberValue": serial}, "format": "mmmm yyyy"}) is None
+
+
+def test_an_interpreted_tab_without_grid_is_rejected():
+    with pytest.raises(sources.SourcesError, match="needs 'grid'"):
+        sources.parse(SOURCES.replace('        grid: "D:F"\n', ""))
+
+
+def test_facts_of_an_older_reading_are_hidden_once_a_newer_one_is_not_interpreted(db, env, fake):
+    _import(env)
+    assert _accruals(db) and _rates(db)
+    historic = 'CARGA: ["Cobros"]\n      HISTORICA: ["VENTAS", "Pagos ARG"]'
+    env.write_text(SOURCES.replace('CARGA: ["VENTAS", "Pagos ARG", "Cobros"]', historic))
+    _set(fake, 11, [*VENTAS[:3], [*VENTAS[3][:4], "1"], *VENTAS[4:]])
+    _set(fake, 12, [*PAGOS_ARG[:2], ["Cliente Pago", "1"], *PAGOS_ARG[3:]])
+    _import(env)
+    assert _accruals(db) == [] and _rates(db) == []

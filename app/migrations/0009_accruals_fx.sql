@@ -81,7 +81,11 @@ SELECT s.title AS planilla, t.name AS pestaña, t.id AS pestaña_id, a.snapshot_
        a.business_unit AS unidad_negocio, a.pod, c.id AS cliente_id, c.name AS cliente,
        a.rules_version AS version_reglas
 FROM accrual a
-JOIN snapshot n ON n.id = a.snapshot_id
+JOIN (
+    SELECT DISTINCT ON (source_tab_id) id, read_at
+    FROM snapshot
+    ORDER BY source_tab_id, read_at DESC, id DESC
+) n ON n.id = a.snapshot_id
 JOIN source_tab t ON t.id = a.source_tab_id AND t.active
 JOIN source s ON s.id = t.source_id
 LEFT JOIN LATERAL (
@@ -115,7 +119,11 @@ SELECT s.title AS planilla, t.name AS pestaña, t.id AS pestaña_id, f.snapshot_
        n.read_at AS leido_en, f.cell_ref AS celda, f.rate_type AS tipo, f.month AS mes,
        f.value AS valor, f.type_to_confirm AS tipo_a_confirmar, f.rules_version AS version_reglas
 FROM fx_rate f
-JOIN snapshot n ON n.id = f.snapshot_id
+JOIN (
+    SELECT DISTINCT ON (source_tab_id) id, read_at
+    FROM snapshot
+    ORDER BY source_tab_id, read_at DESC, id DESC
+) n ON n.id = f.snapshot_id
 JOIN source_tab t ON t.id = f.source_tab_id AND t.active
 JOIN source s ON s.id = t.source_id;
 

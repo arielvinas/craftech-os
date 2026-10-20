@@ -141,3 +141,8 @@ Blast radius: toda importación pasa ahora por `interpret.run` dentro de su tran
 2. Recargar los aliases con la `fuente` en formato "Planilla / Pestaña" (por ejemplo "Facturación - Craftech Total / VENTAS"); los cargados con la fuente vieja no resuelven clientes.
 3. `craftech-os interpret --all` y revisar `alias_sin_cliente` y `cotizacion_discrepante`.
 
+- Revisión de CodeRabbit (PR #10):
+  - La fuente de un alias se escribe con un espacio a cada lado de "/" en los dos lados (`clients.alias_source`), así "Planilla/VENTAS" en el CSV coincide con la pestaña.
+  - Un número del encabezado fuera del rango de fechas no es mes (antes tiraba `OverflowError` y frenaba el worker); cerrado en `plan/improvements.md`.
+  - `sources.yaml` rechaza un esquema de VENTAS o Pagos ARG sin `grid`.
+  - `mcp.devengados` y `mcp.cotizaciones` muestran solo los hechos de la última lectura de cada pestaña (como `mcp.celdas`): si la lectura nueva no se interpreta (pestaña reclasificada o sin esquema), los hechos viejos no aparecen como vigentes. La 0009 cambió otra vez: en la base local principal se reemplazaron las dos vistas a mano y se actualizó su `sha256`; `migrate` dice "nothing to apply".
