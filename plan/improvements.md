@@ -40,3 +40,4 @@
 - [ ] [data-loss] Revisar filas de apertura de bloques en pagos.py y ventas.py por montos tipeados descartados — QA T-012 r1
 - [ ] [tests] Pagos: fila sin clave y monto ilegible dentro de un bloque de funding sin test (2 mutantes sobreviven) — QA T-012 r2
 - [ ] [regla] el único funding_duplicado real (FUNDINGS I4 vs Pagos K110) parece falso positivo; ¿acotar por fecha? pendiente Emi y Ro — QA T-012 r1/r2
+- [ ] [bug] /problemas: ISSUE_TYPES en web/app.py tiene solo los 4 tipos originales; filtrar por alias_sin_cliente, funding_duplicado y los demás tipos de la migración 0009 da 400 — T-014
