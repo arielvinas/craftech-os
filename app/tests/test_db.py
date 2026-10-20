@@ -13,13 +13,17 @@ TABLES = [
     "cell_change",
     "client",
     "client_alias",
+    "client_churn",
     "client_legal_entity",
     "drive_activity",
     "editor_profile",
     "fx_rate",
+    "invoice",
     "issue",
     "issue_resolution",
     "legal_entity",
+    "payment",
+    "payment_total",
     "read_request",
     "schema_migration",
     "snapshot",
@@ -37,6 +41,7 @@ MIGRATIONS = [
     "0007_mcp_cells.sql",
     "0008_clients.sql",
     "0009_accruals_fx.sql",
+    "0010_invoices.sql",
 ]
 
 

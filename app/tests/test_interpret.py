@@ -82,11 +82,11 @@ PAGOS_ARG = [
     ["Dolar oficial", "1011.25", "1022.25", "1033.25"],
     ["Mes", *MONTHS],
     ["Cliente Pago", "64321", "65321", "66321"],
+    ["Total Ingresos", "64321", "65321", "66321"],
     ["MEP", "1187.25", "1198.25", "1209.25"],
     ["Dolar Divisa VTA", "1111.75", "1122.75", "1133.75"],
     ["MEP", "1187.25", "1198.25", "1209.25"],
     ["Mes", *MONTHS],
-    ["Total Ingresos", "64321", "65321", "66321"],
 ]
 AMOUNTS = [x for rows in (VENTAS, VENTAS_MES, PAGOS_ARG) for row in rows for x in row if x]
 AMOUNTS = [x for x in AMOUNTS if isinstance(x, str) and x.replace(".", "").isdigit() and x != "0"]
@@ -264,7 +264,7 @@ def test_rates_are_found_by_their_text(db, env, fake):
     assert _rates(db) == expected
     assert db.execute(
         "SELECT celda FROM mcp.cotizaciones WHERE tipo = 'mep' ORDER BY mes"
-    ).fetchall() == [("B6",), ("C6",), ("D6",)]
+    ).fetchall() == [("B7",), ("C7",), ("D7",)]
     assert _issues(db, "cotizacion_tipo_a_confirmar") == [("oficial", {"rate_type": "oficial"})]
     assert _issues(db, "cotizacion_discrepante") == []
     shifted = [["Nota ficticia"], *PAGOS_ARG[:3], ["Otra fila"], *PAGOS_ARG[3:]]
@@ -273,16 +273,16 @@ def test_rates_are_found_by_their_text(db, env, fake):
     assert _rates(db) == expected
     assert db.execute(
         "SELECT celda FROM mcp.cotizaciones WHERE tipo = 'mep' ORDER BY mes"
-    ).fetchall() == [("B8",), ("C8",), ("D8",)]
+    ).fetchall() == [("B9",), ("C9",), ("D9",)]
 
 
 def test_a_control_mep_that_differs_from_the_operational_one_is_a_problem(db, env, fake):
     discrepant = [row[:] for row in PAGOS_ARG]
-    discrepant[3][2] = "1199.75"
+    discrepant[4][2] = "1199.75"
     _set(fake, 12, discrepant)
     _import(env)
     assert _issues(db, "cotizacion_discrepante") == [
-        ("mep:2025-02", {"month": "2025-02-01", "control": "C4", "operativa": "C6"})
+        ("mep:2025-02", {"month": "2025-02-01", "control": "C5", "operativa": "C7"})
     ]
     assert ("mep", FEB, Decimal("1198.25"), False) in _rates(db)
 
@@ -353,7 +353,7 @@ def test_a_new_read_replaces_the_accruals_of_the_previous_one(db, env, fake):
 
 def test_events_count_facts_and_time_and_nothing_carries_amounts(db, env, fake):
     discrepant = [row[:] for row in PAGOS_ARG]
-    discrepant[3][2] = "1199.75"
+    discrepant[4][2] = "1199.75"
     _set(fake, 12, discrepant)
     _import(env)
     events = db.execute(
@@ -381,9 +381,14 @@ def test_a_repeated_month_column_is_a_problem_and_the_read_goes_on(db, env, fake
     )
     assert db.execute(
         "SELECT celda FROM mcp.cotizaciones WHERE tipo = 'mep' ORDER BY mes"
-    ).fetchall() == [("B6",), ("C6",)]
+    ).fetchall() == [("B7",), ("C7",)]
     unplaced = [key for key, _ in _issues(db, "fila_sin_interpretar") if key.endswith(":D")]
-    assert unplaced == [f"{BEFORE_HEADER}:dolar oficial:D", "Mes:mep (2):D", "Mes:mep:D"]
+    assert unplaced == [
+        f"{BEFORE_HEADER}:dolar oficial:D",
+        "Mes:cliente pago:D",
+        "Total Ingresos:mep (2):D",
+        "Total Ingresos:mep:D",
+    ]
 
 
 def test_a_row_whose_text_ends_like_a_series_suffix_is_its_own_row(db, env, fake):
@@ -397,12 +402,12 @@ def test_a_row_whose_text_ends_like_a_series_suffix_is_its_own_row(db, env, fake
 def test_an_error_in_a_grid_cell_is_unreadable(db, env, fake):
     broken = {"effectiveValue": {"errorValue": {"type": "REF"}}, "formattedValue": "#REF!"}
     _set(fake, 11, [*VENTAS[:3], [*VENTAS[3][:5], broken, "0"], *VENTAS[4:]])
-    broken_rate = [*PAGOS_ARG[:5], ["MEP", "1187.25", broken, "1209.25"], *PAGOS_ARG[6:]]
+    broken_rate = [*PAGOS_ARG[:6], ["MEP", "1187.25", broken, "1209.25"], *PAGOS_ARG[7:]]
     _set(fake, 12, broken_rate)
     _import(env)
     unreadable = _issues(db, "valor_ilegible")
     assert ("Cliente:cliente dos:feb 2025", {"cell_ref": "F4"}) in unreadable
-    assert ("Mes:mep (2):feb 2025", {"cell_ref": "C6"}) in unreadable
+    assert ("Total Ingresos:mep (2):feb 2025", {"cell_ref": "C7"}) in unreadable
     assert ("mep", FEB, Decimal("1198.25"), False) not in _rates(db)
 
 

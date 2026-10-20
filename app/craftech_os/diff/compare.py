@@ -122,7 +122,9 @@ def cell_changes(
         if (moved(of) if of is not None else None) != nf:
             out.append(_change("formula", cell_ref=ref, old_formula=of, new_formula=nf, **row))
         if ov != nv:
-            out.append(_change("value", cell_ref=ref, old_value=ov, new_value=nv, **row))
+            # The colors too: a value typed into an empty cell is the only record of its color.
+            colors = {"old_color": (old or {}).get("bg"), "new_color": (new or {}).get("bg")}
+            out.append(_change("value", cell_ref=ref, old_value=ov, new_value=nv, **colors, **row))
     # A missing cell may be painted: documents read before T-009 did not keep empty cells.
     if old is not None and new is not None and old.get("bg") != new.get("bg"):
         out.append(
