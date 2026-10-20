@@ -1,12 +1,13 @@
 ---
 id: T-014
 title: Pantallas web de solo lectura: Facturas y cobros, Fundings y Clientes
-status: todo
+status: done
 priority: medium
 lane: ui
 depends_on: [T-012]
 effort: M
 milestone: B
+branch: arielvinas/t-014-pantallas-ingresos
 ---
 
 ## Context
@@ -45,15 +46,50 @@ Verificado en el repo el 19-oct-2026:
 
 ## Acceptance criteria
 
-- [ ] Con los datos de la planilla de prueba interpretados, `/facturas` muestra las facturas del mes con su estado y color, y filtrar por estado "retraso" deja solo esas.
-- [ ] El enlace de origen de una factura lleva a la planilla, pestaña y celda correctas.
-- [ ] Si la paridad del mes es distinta de 0, se ve resaltada en `/facturas`. Captura de pantalla con datos de prueba.
-- [ ] `/fundings` muestra los hitos con su origen, y un duplicado aparece marcado.
-- [ ] `/clientes` lista las filas sin cliente con enlace al problema, y no hay ningún control para editar.
-- [ ] Los logs del servidor web, después de recorrer las tres pantallas, no contienen nombres ni montos.
+- [x] Con los datos de la planilla de prueba interpretados, `/facturas` muestra las facturas del mes con su estado y color, y filtrar por estado "retraso" deja solo esas.
+- [x] El enlace de origen de una factura lleva a la planilla, pestaña y celda correctas.
+- [x] Si la paridad del mes es distinta de 0, se ve resaltada en `/facturas`. Captura de pantalla con datos de prueba.
+- [x] `/fundings` muestra los hitos con su origen, y un duplicado aparece marcado.
+- [x] `/clientes` lista las filas sin cliente con enlace al problema, y no hay ningún control para editar.
+- [x] Los logs del servidor web, después de recorrer las tres pantallas, no contienen nombres ni montos.
 
 ## Out of scope
 
 - Cualquier escritura desde la web.
 - Pantallas de cashflow, gastos o P&L (etapas C y D).
 - Login o exponer la web fuera de 127.0.0.1.
+
+## Implementation
+
+- `app/craftech_os/web/app.py`: tres rutas GET nuevas (`/facturas`, `/fundings`, `/clientes`), el filtro `money` y la validación de `mes` (formato año-mes; sin `mes` se toma el mes en curso). Los filtros `estado` y `entidad` se validan contra listas cerradas y `cliente` contra un entero; cualquier otro valor da 400 "Filtro inválido". No hay rutas POST nuevas.
+- `app/craftech_os/web/queries.py`: consultas de solo lectura sobre las vistas del esquema `mcp` (facturas, cobros, razones sociales, paridad de pagos, fundings, paridad de fundings, clientes, aliases) más `v_issue` para los duplicados y las filas sin cliente. Todos los parámetros van ligados.
+- Plantillas nuevas `facturas.html`, `fundings.html` y `clientes.html`; tres enlaces en el menú de `base.html`; dos clases en `style.css` (`parity-off` para la diferencia de paridad, `muted`).
+- Decisiones técnicas:
+  - El filtro de cliente va por id y no por nombre, así el log de acceso (que registra la URL) nunca lleva nombres.
+  - La razón social que se muestra es la del cliente con la entidad legal de la factura.
+  - El neto ARS solo aparece cuando la planilla lo trae.
+  - El color de estado usa la muestra de color que ya usa `/cambios`.
+  - Un hito de funding se marca como duplicado cuando un problema `funding_duplicado` abierto o reabierto lo nombra (planilla, pestaña y celda) en su lado tracker o pagos. La marca enlaza a ese problema.
+  - Las filas sin cliente son los problemas `alias_sin_cliente` abiertos o reabiertos.
+  - `/clientes` no tiene ningún formulario ni control: dice que los aliases se vinculan desde Claude Desktop con `vincular_alias`.
+- Prueba rápida: sembrar la base de prueba con `_seed_ingresos` de `app/tests/test_web.py`, levantar `craftech-os web --host 127.0.0.1 --port 8014` con esa base y recorrer las tres pantallas.
+- Verificado a mano con datos ficticios: las cinco URLs dieron 200, o 400 para el mes inválido. El log del servidor no tiene ningún nombre ni monto: queda solo la URL con mes, estado, entidad legal de Craftech o id de cliente. Captura de la paridad resaltada tomada con Chrome headless (fuera del repo).
+- Sin verificar: datos reales de la planilla de prueba interpretados (solo datos sembrados), y cómo se ve con cientos de filas.
+
+## Test plan
+
+1. `/facturas` sin parámetros: muestra el mes en curso; el selector de mes ofrece los meses con facturas.
+2. `/facturas?mes=<mes con facturas>`: cada fila tiene cliente, razón social, entidad legal, estado con su color, monto, vencimiento, cobro (fecha y certeza) y enlace a la celda.
+3. Filtrar por estado "retraso", por entidad legal y por cliente: quedan solo las filas que corresponden; "Limpiar" vuelve al mes en curso.
+4. El enlace de origen abre la planilla en la pestaña y la celda de la factura.
+5. Un mes con diferencia de paridad distinta de 0 la muestra en rojo; con 0 no se resalta. Captura.
+6. `/fundings`: los hitos con origen pagos o tracker; un hito nombrado por un problema de funding duplicado abierto muestra "duplicado" con enlace al problema; los hitos con clave provisional lo indican.
+7. `/clientes`: razones sociales con plazo de pago, aliases vigentes, filas sin cliente con enlace a `/problemas/<id>`. No hay ningún control para editar.
+8. Filtros inválidos (`mes=2026-13`, `estado=otro`, `cliente=abc`): 400 "Filtro inválido", sin traza.
+9. Después de recorrer todo, el log del servidor no tiene nombres de clientes ni montos.
+
+Radio de impacto: `base.html` (menú de todas las pantallas), `style.css`, `app.py` y `queries.py` (compartidos con `/cambios`, `/problemas` y `/fuentes`, que no cambiaron). Los tests de esas pantallas siguen verdes.
+
+## Post-merge
+
+Ninguno: no hay migraciones, variables de entorno ni comandos nuevos.

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Fundings{% endblock %}
+{% block content %}
+<h1>Fundings</h1>
+<h2>Paridad con Pagos confirmados</h2>
+{% if parity %}
+<table>
+  <thead><tr><th>Planilla</th><th>Unidad de negocio</th><th>Mes</th><th>Total de la planilla</th><th>Suma de fundings</th><th>Diferencia</th></tr></thead>
+  <tbody>
+    {% for r in parity %}
+    <tr>
+      <td>{{ r.planilla }}</td>
+      <td>{{ r.unidad_negocio or "—" }}</td>
+      <td>{{ r.mes.strftime("%Y-%m") }}</td>
+      <td class="num">{{ r.total_planilla | money }}</td>
+      <td class="num">{{ r.suma_fundings | money }}</td>
+      <td class="num{% if r.diferencia %} parity-off{% endif %}">{{ r.diferencia | money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay totales ni fundings pagados para comparar.</p>
+{% endif %}
+
+<h2>Hitos</h2>
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Cliente</th><th>Origen</th><th>Programa</th><th>Oportunidad</th><th>Hito</th><th>Mes</th>
+      <th>Estado</th><th>Monto USD</th><th>Sign-off estimado</th><th>Cobro estimado</th><th>Marcas</th><th>Celda</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.cliente or "sin cliente" }}</td>
+      <td>{{ r.origen }}</td>
+      <td>{{ r.programa or "—" }}</td>
+      <td>{{ r.oportunidad or "—" }}</td>
+      <td>{{ r.clave_hito }}</td>
+      <td>{{ r.mes.strftime("%Y-%m") if r.mes else "—" }}</td>
+      <td>{{ r.estado or "—" }}</td>
+      <td class="num">{{ r.monto_usd | money }}</td>
+      <td>{{ r.signoff_estimado or "—" }}</td>
+      <td>{{ r.cobro_estimado or "—" }}</td>
+      <td>
+        {% if r.duplicado_id %}<a class="warning" href="/problemas/{{ r.duplicado_id }}">duplicado</a>{% endif %}
+        {% if r.clave_provisional %}<span class="muted">clave provisional</span>{% endif %}
+      </td>
+      <td><a href="https://docs.google.com/spreadsheets/d/{{ r.drive_id }}/edit#gid={{ r.sheet_id }}&amp;range={{ r.celda }}">{{ r.planilla }} › {{ r.pestaña }} › {{ r.celda }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay hitos de funding.</p>
+{% endif %}
+{% endblock %}

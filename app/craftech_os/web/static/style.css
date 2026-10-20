@@ -18,3 +18,5 @@ input[type="color"] { width: 1.6em; height: 1.2em; padding: 0; border: 1px solid
 .status-ignorado { color: #666; }
 tr.inactive { color: #999; }
 pre { background: #fafafa; border: 1px solid #ddd; padding: 0.8em; overflow-x: auto; }
+.parity-off { background: #fce8e6; color: #b3261e; font-weight: bold; }
+.muted { color: #666; }

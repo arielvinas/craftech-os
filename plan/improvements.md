@@ -44,3 +44,9 @@
 - [ ] [tests] vincular_alias: faltan tests para texto o cliente vacíos y para el filtro de estado del problema (abierto/reabierto); tres mutantes sobreviven — QA T-013 r1 (F1)
 - [ ] [consistency] vincular_alias crea el cliente y el alias en dos transacciones (mcp_writer no puede leer): si el alias falla el cliente queda creado; el reintento lo encuentra — QA T-013 r1 (F3)
 - [ ] [consistency] vincular_alias: dos llamadas concurrentes con crear_cliente y el mismo nombre en distinta grafía pueden crear dos clientes que normalizan igual; desde ahí el nombre queda ambiguo (falla con error claro) hasta corregirlo a mano. Opción: advisory lock por nombre normalizado o índice único sobre el nombre normalizado — CodeRabbit PR #14
+- [ ] [bug] /problemas: ISSUE_TYPES en web/app.py tiene solo los 4 tipos originales; filtrar por alias_sin_cliente, funding_duplicado y los demás tipos de la migración 0009 da 400 — T-014
+- [ ] [tests] Fundings: ningún test cubre que un funding_duplicado ya resuelto deje de marcarse como duplicado — QA T-014 r1 (F1)
+- [ ] [ui] Mes por defecto de /facturas usa la fecha del sistema, no la zona horaria de Craftech — QA T-014 r1 (F2)
+- [ ] [robustez] client_rows puede dar 500 si se agrega un cliente durante la carga de la página — QA T-014 r1 (F3)
+- [ ] [ui] A 375 px todas las pantallas de la web desbordan hacia la derecha y la barra del menú queda cortada (previo a T-014) — QA T-014 r1 (F4)
+- [ ] [ui] 'sin cliente' se ve distinto en Facturas y en Fundings; colores por estado escritos dos veces — QA T-014 r1 (F5, F6)
