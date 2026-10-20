@@ -14,7 +14,7 @@ branch: arielvinas/t-015-cei-y-paridad-aws
 
 Pedido de Ariel del 20-oct-2026, a partir de una consulta: los montos de la fila "General | CEI | CEI" de la pestaña Pagos no aparecen como fundings, mientras que la fila "TOTAL PAGOS AWS" de la misma pestaña sí los suma.
 
-Hechos dichos por Ariel el 20-oct-2026, **pendientes de ratificar por Emi y Ro** (se guardan como declaración de Ariel, no como regla ratificada):
+Hechos dichos por Ariel el 20-oct-2026, **ratificados por Emi y Ro el 20-oct-2026** después del merge (regla R40 de `docs/v0.9.md`):
 - CEI es un programa de AWS que se pagaba al cierre de cada trimestre; por eso la fila tiene montos en meses salteados.
 - El programa dejó de existir en el segundo trimestre de 2026. El pago de septiembre de 2026 fue el último.
 - La fila es la misma en las dos planillas de facturación: fila 96 en "Facturación - Craftech Total" y fila 102 en "Facturación - SleakOps Total".
@@ -176,3 +176,5 @@ La paridad muestra esto pero no lo corrige. Cuál de los dos lados manda despué
 3. Pendiente:
    - con Emi y Ro: ratificar que CEI se pagaba al cierre de cada trimestre y que septiembre de 2026 fue el último pago;
    - con Ro: qué lado manda después del corte (las diferencias de la paridad desde marzo de 2026).
+
+Resuelto el 20-oct-2026, después del merge: Emi y Ro ratificaron la regla del programa CEI (regla R40 de `docs/v0.9.md`). Ro decidió que después del corte manda el log de fundings: las diferencias de la paridad desde marzo de 2026 que vienen de montos cargados en Pagos fuera de la fila CEI no son fundings (ampliación de la regla R28). Los textos del código que dicen "pendiente de ratificar" quedan para un ticket aparte.

@@ -121,7 +121,7 @@ El programa sale de la columna B. **"General" se toma como bloque de funding** p
 Es una heurística: dos fundings distintos del mismo cliente por el mismo monto también se marcan, y un mismo funding con montos distintos en cada lado no se detecta. El único caso real parece un falso positivo (hallazgo F4 de QA): cruza la celda I4 de FUNDINGS (cargado en febrero de 2026) con la celda K110 de Pagos de Craftech (el mismo cliente con otro texto de alias, agosto de 2025). No se acotó por fecha porque la ventana sería una regla nueva sin ratificar; el problema solo avisa, no borra ni junta nada.
 
 **Preguntas pendientes para Emi y Ro (no bloquean; mientras tanto nada se pierde):**
-1. La fila "General | CEI | CEI" de Pagos, en Craftech y en SleakOps, ¿es un hito por mes del programa CEI? **Respondida por Ariel el 20-oct-2026, pendiente de ratificar por Emi y Ro, ver T-015**: sí, hasta septiembre de 2026; desde T-015 da hito y los siete problemas quedaron resueltos.
+1. La fila "General | CEI | CEI" de Pagos, en Craftech y en SleakOps, ¿es un hito por mes del programa CEI? **Respondida por Ariel y ratificada por Emi y Ro el 20-oct-2026 (regla R40), ver T-015**: sí, hasta septiembre de 2026; desde T-015 da hito y los siete problemas quedaron resueltos.
 2. ¿"General" es un bloque de funding en las dos planillas? Hoy se toma así en las dos.
 3. Para `funding_duplicado`, ¿alcanza con mismo cliente y mismo monto, o hay que acotar por fecha (por ejemplo, el mes de Pagos no más de N meses antes de la carga en el tracker)?
 
@@ -175,5 +175,5 @@ Mutaciones de la ronda 0, cada una deja `test_fundings.py` en rojo:
 
 - En la máquina local, correr `uv run craftech-os migrate`, `uv run craftech-os sources load` y `uv run craftech-os interpret --all`. Esto lo hice el 20-oct-2026 desde la rama; con `main` es idempotente.
 - Ariel o Ro: cargar alias para "FUNDINGS - Log de status [OFICIAL] / FUNDINGS" y para los bloques de funding de Pagos. Hasta entonces `mcp.fundings` no tiene cliente y la detección de duplicados solo compara textos iguales.
-- Pendiente con Emi y Ro: las preguntas de `## Implementation` sobre "General" como bloque de funding y la ventana del duplicado. La de la fila CEI de "General" fue respondida por Ariel el 20-oct-2026, pendiente de ratificar por Emi y Ro, ver T-015 (los siete problemas de esa fila quedaron resueltos ahí).
+- Pendiente con Emi y Ro: las preguntas de `## Implementation` sobre "General" como bloque de funding y la ventana del duplicado. La de la fila CEI de "General" quedó ratificada por Emi y Ro el 20-oct-2026 (regla R40), ver T-015 (los siete problemas de esa fila quedaron resueltos ahí).
 - Pendiente con Ro: el criterio de corte (mes en Pagos o fecha de carga), por la fila cargada en enero y cobrada en junio que hoy no está en ningún lado.
