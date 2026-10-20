@@ -126,6 +126,27 @@ Verificado en el repo el 19-oct-2026:
 - Nota sobre mayo de 2025: la fórmula del total de la planilla para ese mes es `=SUM(H13:H…)+H…` y no incluye la fila 76, que es una factura verde. La diferencia es exactamente el monto de esa celda. Es un error de la planilla y no de la interpretación; hay que avisarle a Finanzas (ver post-merge).
 - Los criterios 1, 2, 3, 5 y 6 (planilla de prueba) están probados con el Google falso por el mismo camino del importer y del diff. Falta verlos contra la planilla de prueba real de Ariel, así que quedan sin tildar. Los criterios 4 y 7 están probados con tests y vistos en la base local.
 
+### Ronda de correcciones 1 (`plan/qa/T-011-round-1.md`)
+
+- Hallazgo 1 (una fila cuyo texto termina en "(2)" chocaba con la segunda fila de una serie y tumbaba la lectura):
+  - `invoice` y `client_churn` pasan a ser únicas por `(pestaña, bloque, alias_text, series_order, mes)`, igual que `accrual` en T-010.
+  - `payment` gana la columna `series_order` y es única por `(pestaña, bloque, row_key, series_order, mes)`. El par clave con sufijo más orden no se repite: si el orden es 1, la clave es el texto mismo.
+  - `mcp.cobros` cruza también por la serie.
+  - `link` busca los cambios por texto sin sufijo más orden, no por la clave con sufijo, así que los cobros de la fila literal y de la serie no se mezclan.
+- Hallazgo 2 (un 0 o un texto tipeado sobre un monto hacía desaparecer la factura sin rastro):
+  - Nueva función SQL `shows_amount`: el valor mostrado tiene un dígito distinto de 0 y ninguna letra aparte de USD o ARS. Los formatos reales de las celdas de Pagos son `USD $1,234`, `-USD $9`, `USD $0` y porcentajes.
+  - `mcp.cambios_de_estado_de_factura` incluye todo cambio de valor que pasa de no mostrar monto a mostrarlo o al revés, y del lado sin monto pone "sin factura". Esto también resuelve la primera mitad del nit: un 0 tipeado en una celda vacía pintada ya no aparece.
+  - `link` usa la misma regla para decidir cuándo un monto tipeado en una celda de color cuenta como el cambio.
+- Hallazgo 3 (una fórmula de Pagos ARG que no era un producto simple dejaba la cotización vacía sin avisar): las referencias se buscan en la fórmula tal cual está escrita, no en los factores del producto.
+  - Con una sola referencia, la cotización sale de esa fila aunque la fórmula sea `=ROUND(50*1.21*B7)` o `=50*1.21*B7+0`. El USD inferido se guarda solo si la fórmula es un producto simple.
+  - Con dos o más referencias, se abre `cotizacion_tipo_a_confirmar` con la celda.
+  - En la base local (solo lectura, intérprete nuevo contra el anterior sobre la última lectura): en Craftech Pagos ARG, 7 de las 11 facturas sin cotización ahora la tienen; 3 de ellas referencian una fila de tipo desconocido y abren `cotizacion_tipo_a_confirmar`. Las 4 que siguen sin cotización tienen fórmulas solo con números (por ejemplo `=(a*b+c*d*e)*f`) y ya abrían `cotizacion_tipeada`. El USD inferido no cambia en ninguna factura.
+- Hallazgo 4 (faltaba un test para "un monto tipeado en una celda ya verde cuenta como cobro"): hay un test nuevo, y el mutante que deja solo los cambios de color ahora muere.
+- Nits:
+  - Hay un comentario junto a la regla del `!`: en las planillas reales, las únicas fórmulas que copian otra pestaña son las de la fila 15 de Pagos de SleakOps.
+  - El redondeo al centavo de la paridad tiene su propio caso dentro del test de paridad: un total que difiere en una millonésima.
+  - Sin resolver: una celda vacía que se pinta sigue apareciendo en la historia. Los cambios de color no guardan el valor de la celda, así que la vista no los puede filtrar sin leer la lectura.
+
 ## Test plan
 
 1. `test_each_color_is_a_state_and_cells_without_invoice_give_none`: los seis estados, un color fuera de la lista (`color_desconocido` y ninguna factura), un monto ilegible (`valor_ilegible`), un 0 con color, un magenta sin monto, una copia de Pagos ARG que no es factura, Marketplace como factura más y la serie repetida (`identidad_en_revision`).
@@ -142,9 +163,33 @@ Mutaciones: cambiar el estado del verde a "enviada" deja 6 tests en rojo; tomar 
 
 Blast radius: toda lectura de Pagos y Pagos ARG pasa ahora por el intérprete dentro de su transacción (un error frena la lectura de esa pestaña). `cell_change` de tipo valor guarda los colores (el diff de todas las pestañas). Los tests de Pagos ARG de T-010 usan el orden real de filas.
 
+Ronda de correcciones 1:
+
+10. `test_a_row_whose_text_ends_in_a_number_is_not_mixed_with_a_series`: dos filas "Cliente Uno" y una tercera con el texto literal "Cliente Uno (2)" dan tres facturas. Al pintar de verde la segunda fila de la serie, su cobro apunta a ese cambio y el de la fila literal queda sin cambio.
+11. `test_a_zero_or_a_text_over_an_amount_shows_in_the_history`: un texto sobre un monto azul y un 0 sobre un monto naranja dan "confirmada → sin factura" y "enviada → sin factura". Un 0 tipeado en una celda vacía no aparece.
+12. `test_an_amount_typed_into_a_green_cell_is_the_payment_change`: celda vacía y verde en la primera lectura, monto tipeado en la segunda. El cobro apunta al cambio de valor.
+13. `test_an_arg_formula_that_is_not_a_plain_product_still_reads_its_rate` (con `=ROUND(50*1.21*B7)` y con `=50*1.21*B7+0`): la cotización sale de la fila 7 y no hay USD inferido.
+14. `test_an_arg_formula_with_two_references_opens_a_problem`: no hay cotización y se abre `cotizacion_tipo_a_confirmar` con la celda.
+15. Test 7 ampliado: un total que difiere en una millonésima da diferencia 0.
+
+Mutaciones de la ronda: corrí 10 mutantes, uno por cada corrección (la unicidad, la clave de `link`, el cruce por serie de `mcp.cobros`, el filtro y el estado de la historia, `shows_amount` con el 0, la búsqueda de referencias, el problema por dos referencias, el monto tipeado en verde y el redondeo de la paridad). Los 10 mueren. El harness de QA `plan/qa/evidence/T-011-r1-mutants.py` busca el texto anterior en algunas líneas y hay que actualizarlo para la ronda 2.
+
+Blast radius de la ronda: solo 0010, `pagos.py` y la lista de columnas de `payment`. Ninguna vista ni tabla anterior a T-011 cambia.
+
 ## Post-merge
 
-1. `craftech-os migrate` (aplica 0010). En la base local principal ya está aplicada con el texto final: se aplicó en el smoke, se deshizo a mano y se volvió a aplicar después del redondeo de la paridad.
-2. `craftech-os interpret --all` y revisar `mcp.paridad_pagos`, `cotizacion_tipeada` y `cotizacion_tipo_a_confirmar`.
-3. Avisarle a Finanzas que el total de mayo de 2025 en Pagos de SleakOps no suma la fila 76.
-4. Probar en la planilla de prueba de Ariel los criterios 1, 2, 3, 5 y 6 (colores, vaciado, cobro con atribución, fila insertada, paridad).
+1. En la base local principal, 0010 ya está aplicada con el texto anterior a la ronda de correcciones 1, y `craftech-os migrate` se niega a seguir porque la migración cambió después de aplicarse. Hay que deshacerla a mano, en una sola transacción:
+   ```sql
+   BEGIN;
+   DROP VIEW mcp.paridad_pagos, mcp.cambios_de_estado_de_factura, mcp.bajas, mcp.cobros, mcp.facturas;
+   DROP TABLE payment, payment_total, client_churn, invoice;
+   DROP FUNCTION a1_column(text), invoice_state(text);
+   DROP FUNCTION IF EXISTS shows_amount(text);
+   DELETE FROM schema_migration WHERE name = '0010_invoices.sql';
+   COMMIT;
+   ```
+   Los comentarios que 0010 cambia en `issue.issue_type`, `mcp.issues.tipo` y `cell_change.new_color` se vuelven a escribir solos en el paso 2. Para verificar: `SELECT name FROM schema_migration ORDER BY name` termina en `0009`. En una base donde 0010 nunca se aplicó, este paso no hace falta.
+2. `craftech-os migrate` (aplica 0010). Para verificar: `\d payment` muestra `series_order`, y `SELECT shows_amount('USD $0'), shows_amount('USD $1,200')` da `f, t`.
+3. `craftech-os interpret --all` y revisar `mcp.paridad_pagos`, `cotizacion_tipeada` y `cotizacion_tipo_a_confirmar`. En Craftech Pagos ARG deberían quedar 4 facturas sin cotización, no 11.
+4. Avisarle a Finanzas que el total de mayo de 2025 en Pagos de SleakOps no suma la fila 76.
+5. Probar en la planilla de prueba de Ariel los criterios 1, 2, 3, 5 y 6 (colores, vaciado, cobro con atribución, fila insertada, paridad). Agregar un caso: tipear un 0 sobre una factura pintada y verlo en `mcp.cambios_de_estado_de_factura` como "sin factura".
