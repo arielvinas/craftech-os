@@ -36,3 +36,4 @@
 - [ ] [test-gap] `shows_amount` sin test para texto con dígitos ("pagado 2/3") tipeado sobre un monto — QA T-011 r2 (plan/qa/T-011-round-2.md)
 - [ ] [test-gap] Sin test para una celda verde con "0" que después recibe un monto — QA T-011 r2 (plan/qa/T-011-round-2.md)
 - [ ] [performance] pagos.link carga el contenido completo de cada snapshot pintado solo para leer los meses del encabezado; crece con cada lectura — medir y, si hace falta, guardar el mes en cell_change — CodeRabbit PR #11
+- [ ] [correctness] Fórmula de Pagos ARG con LOG10(10): al quitar paréntesis queda LOG1010, se lee como referencia y da un USD inferido incorrecto (sin caída) — CodeRabbit autofix T-011 PR #11
