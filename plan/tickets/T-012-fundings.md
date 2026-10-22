@@ -16,7 +16,7 @@ ADR-002, sección 4, reglas de funding (R28, R22 y R15) y riesgos ("FUNDINGS sin
 
 Decisiones de Ariel del 19-oct-2026: ADR-002 aprobado.
 
-Pregunta abierta a Ro, que no bloquea: para el corte, ¿decide la columna de mes o la fecha de carga del hito? El supuesto del ADR, que se implementa así hasta que Ro conteste, es la columna de mes en Pagos y la fecha de carga en el tracker.
+Pregunta abierta a Ro, que no bloquea: para el corte, ¿decide la columna de mes o la fecha de carga del hito? El supuesto del ADR, que se implementa así hasta que Ro conteste, es la columna de mes en Pagos y la fecha de carga en el tracker. **Actualización del 22-oct-2026:** Ariel decidió cortar por mes de cobro en las dos fuentes (pendiente de ratificar por Ro); se implementa en T-016.
 
 Verificado en el repo el 19-oct-2026:
 - En `config/sources.yaml`, la planilla "FUNDINGS - Log de status [OFICIAL]" tiene:
@@ -81,7 +81,7 @@ Columnas usadas y por qué:
 - EMPRESA: la clave de fila y el texto del alias del cliente.
 - TIPO DE FUNDING: el programa, como texto (no hay tabla de programas hasta la etapa C).
 - STATUS y Unidad Comercial: se guardan como texto.
-- Fecha De Carga En Fp: el corte de la regla R28. Desde el 25/2/2026 da hito; antes no, porque ese hito está en Pagos. **Las filas sin fecha de carga (todavía no cargadas) sí dan hito**.
+- Fecha De Carga En Fp: el corte de la regla R28. Desde el 25/2/2026 da hito; antes no, porque ese hito está en Pagos. **Las filas sin fecha de carga (todavía no cargadas) sí dan hito**. Reemplazado por T-016 (decisión de Ariel del 22-oct-2026, pendiente de Ro): el corte pasa a ser el mes de cobro.
 - Fecha Estimada De Firmado De Sign-Off: el sign-off estimado. El cobro estimado se calcula como sign-off + 30 días (regla R22). La columna "Fecha Estimada De Cobro" de la planilla **no se lee**.
 - MONTO A PEDIR: el monto en dólares. Una fila sin monto o en cero no es un hito.
 - OPP ID: la oportunidad.
@@ -133,7 +133,7 @@ Es una heurística: dos fundings distintos del mismo cliente por el mismo monto 
 
 Paridad real por mes: todos los meses dan 0 salvo uno, Craftech en 2026-06 (los montos están en `mcp.paridad_fundings` de la base local, no en el repo).
 
-**Por qué hay diferencia en junio de 2026.** "Pagos confirmados" suma todas las filas del tracker con invoice cargada, también las cargadas antes del corte. En junio de 2026 se pagó una fila de Craftech cargada en el portal en enero de 2026. Por la regla R28 esa fila no da hito en el tracker. Tampoco lo da en Pagos, porque su cobro cae después de febrero de 2026. Con el supuesto vigente, **un hito cargado antes del corte y cobrado después no queda en ningún lado**. Esto alimenta la pregunta abierta a Ro: ¿el corte lo decide la columna de mes o la fecha de carga?
+**Por qué hay diferencia en junio de 2026.** "Pagos confirmados" suma todas las filas del tracker con invoice cargada, también las cargadas antes del corte. En junio de 2026 se pagó una fila de Craftech cargada en el portal en enero de 2026. Por la regla R28 esa fila no da hito en el tracker. Tampoco lo da en Pagos, porque su cobro cae después de febrero de 2026. Con el supuesto vigente, **un hito cargado antes del corte y cobrado después no queda en ningún lado**. Esto alimenta la pregunta abierta a Ro: ¿el corte lo decide la columna de mes o la fecha de carga? Ariel decidió el 22-oct-2026 cortar por mes de cobro (pendiente de Ro), lo que cierra este caso; ver T-016.
 
 ## Test plan
 
@@ -176,4 +176,4 @@ Mutaciones de la ronda 0, cada una deja `test_fundings.py` en rojo:
 - En la máquina local, correr `uv run craftech-os migrate`, `uv run craftech-os sources load` y `uv run craftech-os interpret --all`. Esto lo hice el 20-oct-2026 desde la rama; con `main` es idempotente.
 - Ariel o Ro: cargar alias para "FUNDINGS - Log de status [OFICIAL] / FUNDINGS" y para los bloques de funding de Pagos. Hasta entonces `mcp.fundings` no tiene cliente y la detección de duplicados solo compara textos iguales.
 - Pendiente con Emi y Ro: las preguntas de `## Implementation` sobre "General" como bloque de funding y la ventana del duplicado. La de la fila CEI de "General" quedó ratificada por Emi y Ro el 20-oct-2026 (regla R40), ver T-015 (los siete problemas de esa fila quedaron resueltos ahí).
-- Pendiente con Ro: el criterio de corte (mes en Pagos o fecha de carga), por la fila cargada en enero y cobrada en junio que hoy no está en ningún lado.
+- Pendiente con Ro: ratificar el criterio de corte por mes de cobro que decidió Ariel el 22-oct-2026 (ver T-016), por la fila cargada en enero y cobrada en junio que con el criterio anterior no estaba en ningún lado.
