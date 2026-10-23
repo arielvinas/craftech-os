@@ -746,5 +746,5 @@ def test_an_invalid_fundings_schema_is_rejected(schema, message):
 def test_the_fundings_descriptions_say_cei_is_ratified_and_cut_by_collection(db, env):
     for name in ("funding_milestone", "mcp.fundings", "mcp.paridad_fundings_aws"):
         (text,) = db.execute("SELECT obj_description(%s::regclass)", (name,)).fetchone()
-        assert "pendiente de ratificar por Emi y Ro" not in text
+        assert "ratificar por Emi" not in text
         assert "cobr" in text and "ratificado por Emi y Ro" in text
