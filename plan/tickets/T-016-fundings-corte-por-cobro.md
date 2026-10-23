@@ -1,7 +1,7 @@
 ---
 id: T-016
 title: "Fundings: corte por mes de cobro en el log y textos de CEI ratificados"
-status: qa
+status: pr
 priority: high
 lane: core
 depends_on: []
