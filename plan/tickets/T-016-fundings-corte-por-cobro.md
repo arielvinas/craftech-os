@@ -7,6 +7,7 @@ lane: core
 depends_on: []
 effort: M
 milestone: B
+branch: arielvinas/t-016-fundings-corte-por-cobro
 ---
 
 ## Context
