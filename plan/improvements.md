@@ -52,3 +52,4 @@
 - [ ] [ui] 'sin cliente' se ve distinto en Facturas y en Fundings; colores por estado escritos dos veces — QA T-014 r1 (F5, F6)
 - [ ] [test-gap] Ningún test fija que la fila CEI sea la primera del bloque General de Pagos: una fila de apertura de otro bloque con programa CEI daría hitos posteriores al corte del 25-feb-2026 sin que falle nada — QA T-015 r1 (F1)
 - [ ] [test-gap] El paso de la migración 0012 que resuelve los siete problemas de la fila CEI no tiene test (los tests migran una base vacía) — QA T-015 r1 (F2)
+- [ ] [silent-data] Fechas del log de fundings escritas como texto (p.ej. 'Fecha de pago' = 'TBD') se leen como vacías sin abrir problema — QA T-016 r1 (F1)

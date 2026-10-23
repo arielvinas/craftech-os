@@ -1,12 +1,13 @@
 ---
 id: T-016
 title: "Fundings: corte por mes de cobro en el log y textos de CEI ratificados"
-status: todo
+status: pr
 priority: high
 lane: core
 depends_on: []
 effort: M
 milestone: B
+branch: arielvinas/t-016-fundings-corte-por-cobro
 ---
 
 ## Context
@@ -48,14 +49,14 @@ Descartado: leer la columna "Fecha Estimada De Cobro" del log. Duplica una fecha
 
 ## Acceptance criteria
 
-- Una fila del log cargada en enero de 2026 con "Fecha de pago" en junio de 2026 da un hito de origen tracker en junio de 2026.
-- Una fila del log cargada en enero de 2026 sin "Fecha de pago" y con sign-off estimado más 30 días en abril de 2026 da un hito en abril de 2026.
-- Una fila del log con "Fecha de pago" en enero de 2026 no da hito, aunque esté cargada desde el 25/2/2026.
-- Una fila del log sin "Fecha de pago" ni sign-off estimado, cargada antes del 25/2/2026, no da hito y abre un problema con motivo; cargada desde el 25/2/2026 o sin fecha de carga, da hito como hoy.
-- Con los datos reales de Craftech, la diferencia de junio de 2026 en `mcp.paridad_fundings_aws` se cierra (o, si queda alguna, se explica en el PR con la celda que la causa).
-- Interpretar dos veces seguidas deja los mismos hitos y los mismos problemas, sin duplicados.
-- `grep -rn "pendiente de ratificar por Emi y Ro"` sobre `app/` solo encuentra la migración 0012 (inmutable); los COMMENT vigentes en la base (`obj_description` de las tablas y vistas tocadas) ya no lo dicen.
-- La migración 0012 no cambia (su checksum sigue igual).
+- [x] Una fila del log cargada en enero de 2026 con "Fecha de pago" en junio de 2026 da un hito de origen tracker en junio de 2026.
+- [x] Una fila del log cargada en enero de 2026 sin "Fecha de pago" y con sign-off estimado más 30 días en abril de 2026 da un hito en abril de 2026.
+- [x] Una fila del log con "Fecha de pago" en enero de 2026 no da hito, aunque esté cargada desde el 25/2/2026.
+- [x] Una fila del log sin "Fecha de pago" ni sign-off estimado, cargada antes del 25/2/2026, no da hito y abre un problema con motivo; cargada desde el 25/2/2026 o sin fecha de carga, da hito como hoy.
+- [x] Con los datos reales de Craftech, la diferencia de junio de 2026 en `mcp.paridad_fundings_aws` se cierra (o, si queda alguna, se explica en el PR con la celda que la causa).
+- [x] Interpretar dos veces seguidas deja los mismos hitos y los mismos problemas, sin duplicados.
+- [x] `grep -rn "pendiente de ratificar por Emi y Ro"` sobre `app/` solo encuentra la migración 0012 (inmutable); los COMMENT vigentes en la base (`obj_description` de las tablas y vistas tocadas) ya no lo dicen.
+- [x] La migración 0012 no cambia (su checksum sigue igual).
 
 ## Out of scope
 
@@ -63,3 +64,31 @@ Descartado: leer la columna "Fecha Estimada De Cobro" del log. Duplica una fecha
 - Cambiar cómo se lee Pagos o su corte en febrero de 2026.
 - Leer la columna "Fecha Estimada De Cobro" del log.
 - Cambiar la vista de paridad más allá de su COMMENT (ya suma el log por mes de pago o, si no tiene, por mes de cobro estimado).
+
+## Implementation
+
+- `app/craftech_os/interpret/fundings.py`: el corte del log pasa a ser por mes de cobro. Cobro = "Fecha de pago" o, si falta, sign-off estimado + 30 días (el mismo `estimated_collection` que ya se guardaba). Cobro en febrero de 2026 o antes → no da hito; marzo de 2026 o después → da hito sin mirar la fecha de carga. Sin ninguna fecha de cobro → como antes por fecha de carga, salvo que cargada antes del 25/2/2026 abre `fila_sin_interpretar` con clave `<bloque>:<fila>:cobro`, `cell_ref` en la celda de "Fecha de pago" y `reason` "sin fecha de pago ni sign-off estimado y cargada antes del 25/2/2026: no se sabe si la cubre Pagos". No se agregaron constantes: el corte usa `LAST_PAGOS_MONTH`. Comentarios de módulo, de `CUT` y de `CEI_LAST_MONTH` actualizados.
+- `app/migrations/0013_fundings_collection_cut.sql`: solo COMMENT de `funding_milestone`, `funding_milestone.origin`, `mcp.fundings`, `mcp.fundings.origen`, `mcp.paridad_fundings_aws` y además `mcp.paridad_fundings`, cuyo texto ("los hitos cargados antes del 25/2/2026 están en Pagos") quedaba falso con el corte nuevo. `issue_resolution` es de solo agregar: el motivo que guardó la 0012 no se toca y la migración lo dice.
+- `app/craftech_os/mcp/server.py`: glosario, entradas "Hito de funding" (corte por mes de cobro, pendiente de ratificar por Ro) y "CEI" (ratificado por Emi y Ro).
+- Tests: `test_the_tracker_is_cut_by_collection_month_whenever_the_row_was_loaded` (los casos de los criterios, los bordes 28/2 y 1/3 del cobro estimado, "Fecha de pago" que manda sobre el sign-off, idempotencia) y `test_the_fundings_descriptions_say_cei_is_ratified_and_cut_by_collection`. Ajustados: la lista de migraciones de `test_db.py`, la aserción del glosario de `test_mcp.py` y dos comentarios de fixtures de `test_fundings.py`.
+- Datos reales (copia descartable de la base local, borrada después; misma copia interpretada primero con el código de main y después con el de la rama): la diferencia de junio de 2026 de "Facturación - Craftech Total" en `mcp.paridad_fundings_aws` queda en 0. La cierran dos filas del log, celdas I14 e I19 de "FUNDINGS - Log de status [OFICIAL]", cargadas en enero de 2026 y pagadas en junio de 2026. El log pasa de 95 a 97 hitos y abre un `alias_sin_cliente` nuevo para el texto de esas filas. Ninguna fila real cae en el problema nuevo `:cobro`. Las diferencias de otros meses (marzo a agosto de 2026 y de noviembre de 2026 a marzo de 2027 en Craftech; mayo de 2025 y marzo a mayo de 2026 en SleakOps) ya estaban con el código de main y no cambian: no son de este ticket.
+- Sin consulta al advisor.
+
+## Test plan
+
+1. Fila del log cargada en enero de 2026 con "Fecha de pago" en junio de 2026 → hito tracker; en `mcp.paridad_fundings_aws` suma en junio de 2026.
+2. Cargada en enero de 2026, sin "Fecha de pago", sign-off estimado el 5/3/2026 → hito con cobro estimado el 4/4/2026.
+3. Cargada el 25/2/2026 con "Fecha de pago" en enero de 2026 y sign-off en mayo → sin hito (manda la fecha de pago).
+4. Bordes: sign-off 29/1/2026 (cobro 28/2) → sin hito; sign-off 30/1/2026 (cobro 1/3) → hito.
+5. Sin "Fecha de pago" ni sign-off: cargada antes del 25/2/2026 → sin hito y un `fila_sin_interpretar` con `reason`; cargada el 25/2/2026 o sin fecha de carga → hito.
+6. `craftech-os interpret --all` dos veces → mismos hitos y problemas.
+7. Una "Fecha de pago" con texto (no fecha) → se trata como vacía y decide el sign-off.
+8. `grep -rn "pendiente de ratificar por Emi y Ro" app/` → solo la 0012; `obj_description` de las vistas y la tabla tocadas no lo dicen.
+
+Radio de impacto: `interpret/fundings.py` alimenta `funding_milestone`, `mcp.fundings`, `mcp.paridad_fundings`, `mcp.paridad_fundings_aws`, el chequeo `funding_duplicado` y las pantallas que muestran fundings (T-014). Un hito sin pagar puede cambiar de lado si cambia su sign-off estimado (aceptado en el ticket).
+
+## Post-merge
+
+1. En main, contra la base local: `uv run craftech-os migrate` (aplica `0013_fundings_collection_cut.sql`, solo COMMENT). Verificar: `SELECT name FROM schema_migration ORDER BY 1 DESC LIMIT 1` da la 0013.
+2. Reconstruir y reiniciar el worker para que use el intérprete nuevo: `docker compose -f infra/docker-compose.yml up -d --build worker web`.
+3. `uv run craftech-os interpret --all` (o esperar la próxima lectura). Verificar: `SELECT mes, diferencia FROM mcp.paridad_fundings_aws WHERE planilla = 'Facturación - Craftech Total' AND mes = '2026-06-01'` da 0.

@@ -1,6 +1,6 @@
 """Funding milestones (rule R28): from the AWS blocks of Pagos up to February 2026, and from the
-FUNDINGS tracker for what was loaded from 25 February 2026. The CEI program comes from Pagos up
-to September 2026.
+FUNDINGS tracker for what is collected from March 2026. The CEI program comes from Pagos up to
+September 2026.
 
 Both origins are kept: a funding on both sides is reported as funding_duplicado, never merged.
 Until the tracker has a fund claim ID column, a milestone is known by its program and its
@@ -16,12 +16,13 @@ from craftech_os.diff.compare import a1, blocks, column_letters, normalize, valu
 from craftech_os.interpret.cells import day, number, unreadable
 from craftech_os.issues import detect
 
-# Rule R28: Pagos holds the milestones up to 24/2/2026, the tracker the ones loaded since.
+# Rule R28: Pagos holds what is collected up to February 2026, the tracker what is collected
+# since, whenever it was loaded (Ariel's decision of 22-oct-2026, pending ratification by Ro).
+# A tracker row without any collection date goes by its load date: from 25/2/2026 it is there.
 CUT = date(2026, 2, 25)
 LAST_PAGOS_MONTH = date(2026, 2, 1)
 # The CEI program, paid at the end of each quarter, had its last payment in September 2026:
-# Ariel's declaration of 20-oct-2026, pending ratification by Emi and Ro. The tracker does not
-# hold it, so Pagos is its source after the cut too.
+# ratified by Emi and Ro. The tracker does not hold it, so Pagos is its source after the cut too.
 CEI_LAST_MONTH = date(2026, 9, 1)
 # Rule R22: the collection is expected 30 days after the sign-off.
 COLLECTION_DAYS = 30
@@ -55,7 +56,9 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
     """FUNDINGS: ({"funding_milestone": [fact]}, [(issue_type, key, details)]).
 
     Columns are found by their header text. A row without amount is not a milestone; a row
-    loaded before the cut is in Pagos. A row not loaded yet, without load date, is kept.
+    collected up to February 2026 is in Pagos. The collection is the payment date, else the
+    estimated sign-off + 30 days; a row with neither is kept unless loaded before the cut, when
+    it is a problem: which side holds it is not guessed.
     """
     split = blocks(doc, schema)
     if split is None:
@@ -86,7 +89,20 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
         if not amount:
             continue
         load_date = day(cell("load_date"))
-        if load_date is not None and load_date < CUT:
+        signoff = day(cell("estimated_signoff"))
+        collection = signoff and signoff + timedelta(days=COLLECTION_DAYS)
+        paid_on = day(cell("paid_on"))
+        collected = paid_on or collection
+        if collected is not None and collected.replace(day=1) <= LAST_PAGOS_MONTH:
+            continue
+        if collected is None and load_date is not None and load_date < CUT:
+            name = _row_key(row) if row["key"] else f"fila {row['r'] + 1}"
+            details = {
+                "cell_ref": a1(row["r"], at["paid_on"]),
+                "reason": "sin fecha de pago ni sign-off estimado y cargada antes del 25/2/2026:"
+                " no se sabe si la cubre Pagos",
+            }
+            issues.append(("fila_sin_interpretar", f"{block}:{name}:cobro", details))
             continue
         ref = a1(row["r"], at["amount_usd"])
         if row["key"] in (None, "[vacio]"):
@@ -102,7 +118,6 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
             )
         program = _text(cell("program"))
         order[(row["key"], normalize(program or ""))] += 1
-        signoff = day(cell("estimated_signoff"))
         fund_claim_id = _text(cell("fund_claim_id"))
         milestones.append(
             {
@@ -120,9 +135,9 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict, list[tuple[str
                 "business_unit": business_unit,
                 "load_date": load_date,
                 "estimated_signoff": signoff,
-                "estimated_collection": signoff and signoff + timedelta(days=COLLECTION_DAYS),
+                "estimated_collection": collection,
                 "invoice_loaded": normalize(_text(cell("invoice_loaded")) or "") == "si",
-                "paid_on": day(cell("paid_on")),
+                "paid_on": paid_on,
                 "alias_text": row["key"],
                 "cell_ref": ref,
             }

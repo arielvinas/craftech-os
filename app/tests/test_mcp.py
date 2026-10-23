@@ -448,7 +448,9 @@ def test_the_catalog_describes_every_column_and_the_glossary_has_the_color_grid(
         "Paridad",
     ):
         assert f"**{term}**" in glossary, term
-    assert "pendiente de ratificar por Emi y Ro" in glossary.split("**CEI**", 1)[1]
+    cei = glossary.split("**CEI**", 1)[1].split("\n- **", 1)[0]
+    assert "Ratificado por Emi y Ro" in cei and "pendiente" not in cei
+    assert "desde marzo de 2026" in glossary.split("**Hito de funding**", 1)[1]
     for color in ("#00ffff", "#4a86e8", "#ff9900", "#d9ead3", "#ff00ff"):
         assert color in glossary.split("## Hechos de ingresos", 1)[1]
 

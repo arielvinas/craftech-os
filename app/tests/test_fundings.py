@@ -146,7 +146,7 @@ TRACKER = [
         "4000",
         "O-0002",
     ],
-    # Loaded before the cut: Pagos has it (rule R28).
+    # Loaded before the cut without any collection date: a problem, not a milestone.
     [
         "Cliente Seis",
         "MAP",
@@ -379,6 +379,91 @@ def test_the_tracker_gives_milestones_loaded_from_february_25_2026(db, env, fake
     ]
 
 
+def test_the_tracker_is_cut_by_collection_month_whenever_the_row_was_loaded(db, env, fake):
+    # Ariel's decision of 22-oct-2026 (rule R28): the tracker gives what is collected from
+    # March 2026, by "Fecha de pago" or else by the estimated sign-off + 30 days (rule R22).
+    def row(name, loaded, signoff=None, paid=None):
+        loaded = loaded and _date(loaded)
+        signoff = signoff and _date(signoff)
+        paid = paid and _date(paid)
+        return [
+            name,
+            "MAP",
+            "Cargado en FP",
+            "Craftech",
+            loaded,
+            signoff,
+            None,
+            "100",
+            "O-1",
+            None,
+            paid,
+        ]
+
+    jan, feb_25 = date(2026, 1, 15), date(2026, 2, 25)
+    _set(
+        fake,
+        41,
+        [
+            TRACKER_HEADER,
+            row("Pagado En Junio", jan, paid=date(2026, 6, 10)),
+            row("Cobro En Abril", jan, signoff=date(2026, 3, 5)),
+            # Paid in January: Pagos has it, even if loaded after the cut and signed off later.
+            row("Pagado En Enero", feb_25, signoff=date(2026, 5, 1), paid=date(2026, 1, 20)),
+            # Sign-off + 30 days on 28/2 and on 1/3: the edges of the cut.
+            row("Cobro En Febrero", jan, signoff=date(2026, 1, 29)),
+            row("Cobro En Marzo", jan, signoff=date(2026, 1, 30)),
+            # No collection date at all: by the load date, as before.
+            row("Sin Fechas Antes", jan),
+            row("Sin Fechas Desde", feb_25),
+            row("Sin Fechas Sin Carga", None),
+        ],
+        "file-f",
+    )
+    _import(env)
+    rows = db.execute(
+        "SELECT clave_fila, coalesce(fecha_pago, cobro_estimado), celda FROM mcp.fundings"
+        " WHERE origen = 'tracker' ORDER BY celda"
+    ).fetchall()
+    assert rows == [
+        ("pagado en junio", date(2026, 6, 10), "H2"),
+        ("cobro en abril", date(2026, 4, 4), "H3"),
+        ("cobro en marzo", date(2026, 3, 1), "H6"),
+        ("sin fechas desde", None, "H8"),
+        ("sin fechas sin carga", None, "H9"),
+    ]
+    assert _issues(db, "fila_sin_interpretar") == [
+        (
+            "EMPRESA:sin fechas antes:cobro",
+            {
+                "cell_ref": "K7",
+                "reason": "sin fecha de pago ni sign-off estimado y cargada antes del 25/2/2026:"
+                " no se sabe si la cubre Pagos",
+            },
+        )
+    ]
+    paid_in_june = (
+        "Facturación Ficticia",
+        date(2026, 6, 1),
+        None,
+        Decimal("100"),
+        -100,
+    )
+    assert paid_in_june in _aws_parity(db)
+
+    def state():
+        return [
+            db.execute("SELECT * FROM mcp.fundings ORDER BY celda, origen").fetchall(),
+            db.execute(
+                "SELECT id, tipo, estado, celda, detalle FROM mcp.issues ORDER BY id"
+            ).fetchall(),
+        ]
+
+    before = state()
+    assert cli.main(["interpret", "--all"]) == 0
+    assert state() == before
+
+
 def test_a_fund_claim_id_is_the_key_when_the_tracker_has_it(db, env, fake):
     header = [*TRACKER_HEADER, "Fund claim ID"]
     first = [*TRACKER[1], "FC-123"]
@@ -491,7 +576,7 @@ def test_a_duplicate_needs_the_same_amount_and_client_and_aliases_join_texts(
             row("Cliente Uno", date(2026, 3, 1), "1234"),
             # Another text, the amount of Cliente Uno in Pagos (D5).
             row("Uno Alias", date(2026, 3, 2), "5000"),
-            # Loaded before the cut, after 1 February: Pagos has it (rule R28).
+            # Loaded before the cut, after 1 February, without collection date: not a milestone.
             row("Cliente Siete", date(2026, 2, 24), "777"),
         ],
         "file-f",
@@ -656,3 +741,10 @@ def test_an_invalid_fundings_schema_is_rejected(schema, message):
     text = f"sources: [{{title: A, tabs: {{CARGA: [FUNDINGS]}}, schemas: {{FUNDINGS: {schema}}}}}]"
     with pytest.raises(SourcesError, match=message):
         parse(text)
+
+
+def test_the_fundings_descriptions_say_cei_is_ratified_and_cut_by_collection(db, env):
+    for name in ("funding_milestone", "mcp.fundings", "mcp.paridad_fundings_aws"):
+        (text,) = db.execute("SELECT obj_description(%s::regclass)", (name,)).fetchone()
+        assert "ratificar por Emi" not in text
+        assert "cobr" in text and "ratificado por Emi y Ro" in text
