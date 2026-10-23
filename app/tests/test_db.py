@@ -46,6 +46,7 @@ MIGRATIONS = [
     "0010_invoices.sql",
     "0011_fundings.sql",
     "0012_cei_aws_parity.sql",
+    "0013_fundings_collection_cut.sql",
 ]
 
 

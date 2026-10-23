@@ -81,16 +81,19 @@ planilla, pestaña, celda y lectura de origen, y el cliente ya resuelto por su a
 - **Baja** (mcp.bajas): en SleakOps Pagos, una celda pintada sin monto marca que el cliente se
   dio de baja; no es una factura. Qué color la marca está a confirmar hasta que Emi responda la
   pregunta F-05.
-- **Hito de funding** (mcp.fundings): un pago de un programa de AWS. Hasta febrero de 2026 sale
-  del bloque AWS de Pagos y desde el 25 de febrero de 2026 del tracker FUNDINGS. Su clave es el
-  fund claim ID o, si falta, programa más orden (provisoria). El cobro estimado es la fecha de
-  sign-off más 30 días. Se lleva aparte de las facturas; el mismo funding en los dos lados se
+- **Hito de funding** (mcp.fundings): un pago de un programa de AWS. Lo cobrado hasta febrero
+  de 2026 sale del bloque AWS de Pagos y lo cobrado desde marzo de 2026 del tracker FUNDINGS,
+  sin importar cuándo se cargó. El mes de cobro es el de la fecha de pago o, si falta, el del
+  cobro estimado (la fecha de sign-off más 30 días); una fila del tracker sin ninguna de las dos
+  cuenta si se cargó desde el 25 de febrero de 2026 o todavía no se cargó, y si se cargó antes
+  abre un problema fila_sin_interpretar. El corte por mes de cobro es decisión de Ariel del
+  22-oct-2026, pendiente de ratificar por Ro. Su clave es el fund claim ID o, si falta, programa
+  más orden (provisoria). Se lleva aparte de las facturas; el mismo funding en los dos lados se
   conserva en ambos y abre un problema funding_duplicado.
 - **CEI** (programa CEI en mcp.fundings): un programa de AWS que se cobra a fin de cada
   trimestre, sin cliente. Está en la fila CEI del bloque "General" de Pagos, no en el tracker:
   sus montos son hitos de funding hasta septiembre de 2026, cuando terminó el programa; un monto
-  posterior abre un problema fila_sin_interpretar. Declaración de Ariel del 20-oct-2026,
-  pendiente de ratificar por Emi y Ro.
+  posterior abre un problema fila_sin_interpretar. Ratificado por Emi y Ro.
 - **Cotización** (mcp.cotizaciones): pesos por dólar de un mes, de las filas de cotización de
   Pagos ARG. Tipo mep (la fila MEP operativa) u oficial (la fila "Dólar oficial", cuyo tipo está
   a confirmar hasta que Emi responda la pregunta F-01). Una factura en pesos usa la cotización
