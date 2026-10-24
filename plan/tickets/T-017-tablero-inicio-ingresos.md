@@ -110,6 +110,15 @@ Verificado: lint, formato y la suite completa en verde; prueba de humo con datos
 
 Cómo probar rápido: `cd app && TEST_DATABASE_URL=... uv run pytest tests/test_web.py -k inicio`.
 
+### Ronda de arreglos 1 (`plan/qa/T-017-round-1.md`)
+
+- F1 (major): test nuevo `test_the_problemas_filter_accepts_every_type_the_database_allows`, que compara `ISSUE_TYPES` con los valores del CHECK `issue_issue_type_check` de la base migrada. Se vio rojo al sacar `fila_sin_interpretar` antes de commitearlo.
+- F2 (minor): `_seed_inicio` suma el cobro de la factura en USD, un hito de Pagos en mayo, hitos y totales de marzo del año anterior en las dos paridades, un problema `fila_sin_interpretar` resuelto ayer y visto de nuevo (reabierto), un `source_failed` actual de la planilla B y una lectura pedida pendiente. Las aserciones cubren cada uno: cobrado de marzo y total en 1,100.00, mayo con 400.00, ninguna fila de paridad del año anterior, tres tipos abiertos, un solo "pendiente desde". El código no cambió por F2: estaba bien, faltaban los tests.
+- F3 (minor), arreglo mínimo que sugiere el informe, sin tocar vistas: la columna se titula "Última lectura con cambios" y el error se muestra en gris (`muted`) cuando es anterior a `leido_en`, y en rojo (`warning`) si no. El problema de fondo quedó como split-out en `plan/improvements.md`.
+- F4 (nit): fuera del alcance, registrado en `plan/improvements.md` (misma clase que T-014 F2).
+- Mutación: el harness de QA más un mutante para F3 (el error viejo en rojo): 24 mutantes, 24 muertos.
+- Prueba de humo contra la base real local con el rol de la app, en un puerto aparte: `/` responde 200, 11 errores en gris y 9 en rojo (coincide con lo que midió QA), log sin nombres ni montos.
+
 ## Test plan
 
 1. Abrir `/`: responde 200, sin redirección; el menú muestra "Inicio" primero.
@@ -120,11 +129,13 @@ Cómo probar rápido: `cd app && TEST_DATABASE_URL=... uv run pytest tests/test_
 6. Un funding de Pagos de 700 en el mismo mes: el facturado no cambia; aparece solo en la tabla de fundings.
 7. Paridad con "Pagos confirmados" (hito del tracker pagado sin total, -300) y con "TOTAL PAGOS AWS" (650 contra 700, -50): las dos resaltadas con `parity-off`, cada una en su tabla.
 8. Problemas: un tipo abierto cuenta 1; uno resuelto y uno ignorado no aparecen; cada enlace `/problemas?tipo=<tipo>` responde 200 (incluidos los 7 tipos agregados a `ISSUE_TYPES`).
-9. Planillas: la que tiene un `source_failed` muestra fecha y error; una lectura pedida pendiente muestra "pendiente desde".
+9. Planillas: la columna dice "Última lectura con cambios". La que tiene un `source_failed` anterior a su última lectura muestra fecha y error en gris; la que falló después, en rojo; una lectura pedida pendiente muestra "pendiente desde" (todo con test desde la ronda 1).
+11. Cobro de una factura en USD: suma su monto en el cobrado del mes de la factura. Hitos de Pagos en marzo y mayo: cada mes muestra solo el suyo. Paridades del año anterior: no aparecen. Un problema reabierto se cuenta.
 10. Sin `<form>`, `<input>` ni `<button>` en `/`; el conjunto de rutas POST sigue siendo solo `leer-ahora`; el log del servidor no tiene nombres ni montos.
 
 Radio de impacto:
 - `base.html`: todas las pantallas cambian el menú.
+- `inicio.html` solo: el cambio de la ronda 1 en la tabla de planillas no toca `/fuentes`.
 - `ISSUE_TYPES`: el desplegable de tipos de `/problemas` ahora lista 11 tipos y el filtro acepta los 7 nuevos.
 - `GET /` ya no redirige a `/cambios`: cualquier marcador o enlace a `/` cae en el tablero.
 - `queries.py` solo suma funciones; ninguna existente cambió.
