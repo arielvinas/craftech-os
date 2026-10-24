@@ -1,7 +1,9 @@
 """The web screens against the test database, with synthetic data only."""
 
 import json
-from datetime import UTC, datetime, timedelta
+import logging
+import re
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -97,7 +99,8 @@ def test_every_screen_answers_200(db, client):
         assert response.status_code == 200, path
         assert response.headers["content-security-policy"] == "default-src 'self'"
     root = client.get("/", follow_redirects=False)
-    assert root.status_code == 303 and root.headers["location"] == "/cambios"
+    assert root.status_code == 200 and "Ingresos de" in root.text
+    assert '<a href="/">Inicio</a>' in root.text
 
 
 def test_cell_values_are_escaped(db, client):
@@ -444,3 +447,212 @@ def test_the_web_has_no_new_post_route():
 )
 def test_invalid_income_filter_is_400_without_the_database(monkeypatch, path):
     test_invalid_filter_is_400_without_the_database(monkeypatch, path)
+
+
+YEAR = date.today().year
+
+
+def _seed_inicio(db) -> dict:
+    """On top of _seed, in March of the current year: an accrual, a USD invoice, an ARS one with
+    its amount in USD, another without it, payments of all three, a funding milestone from each
+    side, an AWS total that misses, issues of three types (one reopened), a source that failed
+    before its last read and one that is failing now with a pending read. A May funding and last
+    year's parities sit outside March."""
+    ids = _seed(db)
+    pagos, march = ids["tab_b"], date(YEAR, 3, 1)
+    snap = _latest_snapshot(db, pagos)
+    db.execute(
+        "INSERT INTO accrual (source_tab_id, block, row_key, series_order, month, amount_usd,"
+        " alias_source, alias_text, snapshot_id, cell_ref, rules_version)"
+        " VALUES (%s, 'Cliente', 'cliente ficticio', 1, %s, 2000, 'VENTAS', 'cliente ficticio',"
+        " %s, 'B2', 'v1')",
+        (pagos, march, snap),
+    )
+    inc, sa = "Craftech-io Inc.", "Craftech S.A."
+    for text, legal, state, amount, currency, net_ars, usd, cell in (
+        ("cliente usd", inc, "a facturar", 1000, "USD", None, None, "C3"),
+        ("cliente ars", sa, "pagada", 121000, "ARS", 121000, 100, "C4"),
+        ("cliente ars sin usd", sa, "pagada", 50000, "ARS", 50000, None, "C5"),
+    ):  # fmt: skip
+        db.execute(
+            "INSERT INTO invoice (source_tab_id, block, row_key, series_order, month,"
+            " legal_entity, state, amount, currency, net_ars, inferred_usd, fx_rate_to_confirm,"
+            " alias_source, alias_text, snapshot_id, cell_ref, rules_version)"
+            " VALUES (%s, 'Cliente', %s, 1, %s, %s, %s, %s, %s, %s, %s, false, 'Pagos', %s, %s,"
+            " %s, 'v1')",
+            (pagos, text, march, legal, state, amount, currency, net_ars, usd, text, snap, cell),
+        )
+    for text, legal in (("cliente usd", inc), ("cliente ars", sa), ("cliente ars sin usd", sa)):
+        db.execute(
+            "INSERT INTO payment (source_tab_id, block, row_key, series_order, month,"
+            " legal_entity, snapshot_id, rules_version)"
+            " VALUES (%s, 'Cliente', %s, 1, %s, %s, %s, 'v1')",
+            (pagos, text, march, legal, snap),
+        )
+    ids["tracker"] = db.execute(
+        "INSERT INTO source_tab (source_id, sheet_id, name, class)"
+        " VALUES (%s, 3, 'FUNDINGS', 'CARGA') RETURNING id",
+        (ids["a"],),
+    ).fetchone()[0]
+    tracker_snap = db.execute(
+        "INSERT INTO snapshot (source_tab_id, drive_version, drive_modified_at,"
+        " duration_ms, origin, content_hash, content, row_count, col_count, cell_count)"
+        " VALUES (%s, 3, now(), 120, 'lectura', %s, '{}', 1, 1, 1) RETURNING id",
+        (ids["tracker"], f"{3:064x}"),
+    ).fetchone()[0]
+    last_march = date(YEAR - 1, 3, 1)
+    for order, month, amount, cell in ((1, march, 700, "G6"), (2, date(YEAR, 5, 1), 400, "I6"),
+                                       (3, last_march, 700, "G7")):  # fmt: skip
+        db.execute(
+            "INSERT INTO funding_milestone (source_tab_id, origin, block, row_key, program,"
+            " program_order, provisional_key, month, amount_usd, alias_source, alias_text,"
+            " snapshot_id, cell_ref, rules_version)"
+            " VALUES (%s, 'pagos', 'Fundings de AWS', 'cliente usd', 'Programa Ficticio',"
+            " %s, true, %s, %s, 'Pagos', 'cliente usd', %s, %s, 'v1')",
+            (pagos, order, month, amount, snap, cell),
+        )
+    # Paid in March (and last March) with no "Pagos confirmados" total: that parity misses 300.
+    for order, month, cell in ((1, march, "C2"), (2, last_march, "C3")):
+        db.execute(
+            "INSERT INTO funding_milestone (source_tab_id, origin, block, row_key, program,"
+            " fund_claim_id, program_order, provisional_key, amount_usd, business_unit,"
+            " invoice_loaded, paid_on, alias_source, alias_text, snapshot_id, cell_ref,"
+            " rules_version)"
+            " VALUES (%s, 'tracker', 'FUNDINGS', 'cliente usd', 'Programa Ficticio', %s, %s,"
+            " false, 300, 'Unidad Ficticia', true, %s, 'FUNDINGS', 'cliente usd', %s, %s, 'v1')",
+            (ids["tracker"], f"FC-000{order}", order, month + timedelta(days=14), tracker_snap,
+             cell),
+        )  # fmt: skip
+    # "TOTAL PAGOS AWS" says 650 for the 700 of the Pagos milestone: that parity misses -50.
+    for month, cell in ((march, "G1"), (last_march, "G2")):
+        db.execute(
+            "INSERT INTO funding_total (source_tab_id, row_key, month, amount, snapshot_id,"
+            " cell_ref, rules_version) VALUES (%s, 'total pagos aws', %s, 650, %s, %s, 'v1')",
+            (pagos, month, snap, cell),
+        )
+    for key, kind in (("alias-1", "alias_sin_cliente"), ("alias-2", "alias_sin_cliente"),
+                      ("dup-1", "funding_duplicado"),
+                      ("fila-1", "fila_sin_interpretar")):  # fmt: skip
+        ids[key] = db.execute(
+            "INSERT INTO issue (issue_type, stable_key, source_id, source_tab_id)"
+            " VALUES (%s, %s, %s, %s) RETURNING id",
+            (kind, key, ids["b"], pagos),
+        ).fetchone()[0]
+    db.execute(
+        "INSERT INTO issue_resolution (issue_id, action, author, reason)"
+        " VALUES (%s, 'resuelto', 'Revisora Ficticia', 'prueba'),"
+        " (%s, 'ignorado', 'Revisora Ficticia', 'prueba')",
+        (ids["alias-2"], ids["dup-1"]),
+    )
+    # Resolved yesterday and seen again since: reopened, so it counts.
+    db.execute(
+        "INSERT INTO issue_resolution (issue_id, action, author, reason, created_at)"
+        " VALUES (%s, 'resuelto', 'Revisora Ficticia', 'prueba', now() - interval '1 day')",
+        (ids["fila-1"],),
+    )
+    db.execute(
+        "INSERT INTO system_event (kind, source_id, occurred_at, details)"
+        " VALUES ('source_failed', %s, '2026-10-01 12:00-03', '{\"error\": \"Error Ficticio\"}')",
+        (ids["a"],),
+    )
+    # B fails after its last read, and a read of it is pending.
+    db.execute(
+        "INSERT INTO system_event (kind, source_id, details)"
+        " VALUES ('source_failed', %s, '{\"error\": \"Error Vigente\"}')",
+        (ids["b"],),
+    )
+    db.execute("INSERT INTO read_request (source_id, requested_by) VALUES (%s, 'cli')", (ids["b"],))
+    return ids
+
+
+def _month_row(html: str, month: int) -> str:
+    return re.search(rf'<tr id="mes-{YEAR}-{month:02d}">(.*?)</tr>', html, re.S).group(1)
+
+
+def test_inicio_sums_each_month_in_usd(db, client):
+    _seed_inicio(db)
+    html = client.get("/").text
+    march = _month_row(html, 3)
+    # Devengado 2000; facturado 1000 USD + the 100 USD of the ARS invoice, never its pesos;
+    # cobrado the same, since both are paid.
+    assert re.findall(r'<td class="num">([^<]*)</td>', march)[:3] == [
+        "2,000.00", "1,100.00", "1,100.00"
+    ]  # fmt: skip
+    assert "121,000" not in html and "50,000" not in html
+    # The ARS invoice without its USD amount and its payment are counted apart, with a link.
+    assert f'<a href="/facturas?mes={YEAR}-03">1 factura, 1 cobro</a>' in march
+    assert "por mes de la factura" in html
+
+
+def test_inicio_shows_twelve_months_and_a_total(db, client):
+    _seed_inicio(db)
+    html = client.get("/").text
+    for month in range(1, 13):
+        row = _month_row(html, month)
+        assert f'<a href="/facturas?mes={YEAR}-{month:02d}">{YEAR}-{month:02d}</a>' in row
+    assert '<td class="num">0.00</td>' in _month_row(html, 1)
+    total = re.search(r'<tr class="total">(.*?)</tr>', html, re.S).group(1)
+    assert re.findall(r'<td class="num">([^<]*)</td>', total) == [
+        "2,000.00", "1,100.00", "1,100.00"
+    ]  # fmt: skip
+    assert "1 factura, 1 cobro" in total
+
+
+def test_inicio_keeps_fundings_apart_and_highlights_both_parities(db, client):
+    _seed_inicio(db)
+    html = client.get("/").text
+    assert "700.00" not in _month_row(html, 3) and "1,800.00" not in html
+    fundings = html[html.index('id="fundings"') :]
+    march = re.search(rf'<tr id="funding-{YEAR}-03">(.*?)</tr>', fundings, re.S).group(1)
+    assert "700.00" in march
+    may = re.search(rf'<tr id="funding-{YEAR}-05">(.*?)</tr>', fundings, re.S).group(1)
+    assert "400.00" in may
+    assert f"<td>{YEAR - 1}-" not in fundings  # last year's parities stay out
+    assert 'href="/fundings"' in fundings
+    assert 'class="num parity-off">-300.00</td>' in fundings  # Pagos confirmados
+    assert 'class="num parity-off">-50.00</td>' in fundings  # TOTAL PAGOS AWS
+    assert "Pagos confirmados" in fundings and "TOTAL PAGOS AWS" in fundings
+
+
+def test_inicio_counts_open_issues_by_type(db, client):
+    _seed_inicio(db)
+    html = client.get("/").text
+    assert '<a href="/problemas?tipo=alias_sin_cliente">alias_sin_cliente</a></td>' in html
+    assert '<a href="/problemas?tipo=color_desconocido">color_desconocido</a></td>' in html
+    assert "funding_duplicado" not in html  # ignored: not open
+    issues = html[html.index('id="problemas"') : html.index('id="fuentes"')]
+    assert '<a href="/problemas?tipo=fila_sin_interpretar">' in issues  # reopened: open again
+    assert re.findall(r'<td class="num">(\d+)</td>', issues) == ["1", "1", "1"]
+    # Every type the dashboard links to is accepted by the Problemas filter.
+    assert client.get("/problemas?tipo=alias_sin_cliente").status_code == 200
+
+
+def test_the_problemas_filter_accepts_every_type_the_database_allows(db, client):
+    (check,) = db.execute(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+        " WHERE conname = 'issue_issue_type_check'"
+    ).fetchone()
+    assert set(web.ISSUE_TYPES) == set(re.findall(r"'(\w+)'", check))
+
+
+def test_inicio_shows_each_source_last_read_and_error(db, client):
+    _seed_inicio(db)
+    html = client.get("/").text
+    sources = html[html.index('id="fuentes"') :]
+    assert "Planilla Ficticia A" in sources and "Planilla Ficticia B" in sources
+    assert "Última lectura con cambios" in sources
+    # A's error came before its last read: shown, but not as current. B's is current.
+    assert '<span class="muted">2026-10-01 12:00:00: Error Ficticio</span>' in sources
+    assert re.search(r'<span class="warning">[^<]*: Error Vigente</span>', sources)
+    assert sources.count("pendiente desde") == 1
+    assert 'href="/fuentes"' in sources
+
+
+def test_inicio_is_read_only_and_logs_no_names_or_amounts(db, client, caplog):
+    _seed_inicio(db)
+    with caplog.at_level(logging.DEBUG):
+        html = client.get("/").text
+    for control in ("<form", "<input", "<button", "<textarea", "<select"):
+        assert control not in html
+    for secret in ("Planilla Ficticia", "cliente", "2000", "1100", "Error Ficticio"):
+        assert secret not in caplog.text

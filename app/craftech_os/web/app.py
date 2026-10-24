@@ -30,11 +30,11 @@ CHANGE_TYPES = (
     "row_deleted", "row_moved", "column_inserted", "tab_added", "tab_deleted", "tab_renamed",
 )  # fmt: skip
 ISSUE_TYPES = (
-    "color_desconocido",
-    "alineacion_ambigua",
-    "valor_ilegible",
-    "pestana_sin_clasificar",
-)
+    "color_desconocido", "alineacion_ambigua", "valor_ilegible", "pestana_sin_clasificar",
+    "alias_sin_cliente", "cotizacion_tipeada", "cotizacion_discrepante",
+    "cotizacion_tipo_a_confirmar", "funding_duplicado", "identidad_en_revision",
+    "fila_sin_interpretar",
+)  # fmt: skip
 ISSUE_STATES = ("abierto", "resuelto", "ignorado", "reabierto")
 READ_RESULTS = {
     "created": "Pedido de lectura creado: el worker la lee en la próxima vuelta.",
@@ -156,9 +156,21 @@ def _attribution(change: dict, names: dict[str, str]) -> str:
     return f"{shown}, {at:%Y-%m-%d %H:%M}" if at else shown
 
 
-@app.get("/")
-def root():
-    return RedirectResponse("/cambios", status_code=303)
+@app.get("/", response_class=HTMLResponse)
+def inicio(request: Request):
+    # No parameters: always the current year.
+    year = date.today().year
+    with _connect() as conn:
+        context = {
+            "year": year,
+            "months": queries.income_months(conn, year),
+            "funding_months": queries.funding_months(conn, year),
+            "parity": queries.funding_parity_of_year(conn, year),
+            "parity_aws": queries.funding_parity_aws_of_year(conn, year),
+            "issues": queries.open_issue_counts(conn),
+            "sources": queries.source_reads(conn),
+        }
+    return templates.TemplateResponse(request, "inicio.html", context)
 
 
 @app.get("/cambios", response_class=HTMLResponse)
