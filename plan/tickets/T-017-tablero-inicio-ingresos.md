@@ -1,7 +1,7 @@
 ---
 id: T-017
 title: Tablero de inicio de ingresos en la web (solo lectura)
-status: qa
+status: pr
 priority: medium
 lane: ui
 depends_on: []
