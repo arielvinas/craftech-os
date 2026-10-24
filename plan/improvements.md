@@ -55,3 +55,4 @@
 - [ ] [silent-data] Fechas del log de fundings escritas como texto (p.ej. 'Fecha de pago' = 'TBD') se leen como vacías sin abrir problema — QA T-016 r1 (F1)
 - [ ] [decision-pending] Los hitos del tracker FUNDINGS no tienen mes en mcp.fundings: el tablero de inicio suma por mes solo los de Pagos; falta decidir qué fecha los ubica en un mes (fecha de pago, cobro estimado) — T-017
 - [ ] [observability] mcp.sources no tiene la fecha de la última lectura buena cuando la planilla no cambió, y ultimo_error no dice si el error ya pasó: el tablero y /fuentes no pueden mostrar si una planilla falla hoy (el tablero solo grisa el error anterior a leido_en) — QA T-017 r1 (F3)
+- [ ] [ui] El año del tablero de inicio sale de date.today() del host, no de la zona horaria de Craftech; misma clase que T-014 F2 — QA T-017 r1 (F4)
