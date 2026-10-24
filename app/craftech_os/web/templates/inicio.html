@@ -91,14 +91,14 @@
 <section id="fuentes">
 <h2><a href="/fuentes">Planillas</a></h2>
 <table>
-  <thead><tr><th>Planilla</th><th>Última lectura</th><th>Lectura pedida</th><th>Último error</th></tr></thead>
+  <thead><tr><th>Planilla</th><th>Última lectura con cambios</th><th>Lectura pedida</th><th>Último error</th></tr></thead>
   <tbody>
     {% for s in sources %}
     <tr>
       <td>{{ s.planilla }}</td>
       <td>{{ s.leido_en | when }}</td>
       <td>{% if s.lectura_pedida_en %}pendiente desde {{ s.lectura_pedida_en | when }}{% else %}—{% endif %}</td>
-      <td>{% if s.ultimo_error %}<span class="warning">{{ s.ultimo_error_en | when }}: {{ s.ultimo_error }}</span>{% else %}—{% endif %}</td>
+      <td>{% if s.ultimo_error %}<span class="{{ "muted" if s.leido_en and s.ultimo_error_en < s.leido_en else "warning" }}">{{ s.ultimo_error_en | when }}: {{ s.ultimo_error }}</span>{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>

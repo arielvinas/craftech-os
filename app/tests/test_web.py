@@ -454,8 +454,10 @@ YEAR = date.today().year
 
 def _seed_inicio(db) -> dict:
     """On top of _seed, in March of the current year: an accrual, a USD invoice, an ARS one with
-    its amount in USD, another without it, payments of both ARS ones, a funding milestone from
-    each side, an AWS total that misses, issues of two types and a source that failed."""
+    its amount in USD, another without it, payments of all three, a funding milestone from each
+    side, an AWS total that misses, issues of three types (one reopened), a source that failed
+    before its last read and one that is failing now with a pending read. A May funding and last
+    year's parities sit outside March."""
     ids = _seed(db)
     pagos, march = ids["tab_b"], date(YEAR, 3, 1)
     snap = _latest_snapshot(db, pagos)
@@ -480,12 +482,12 @@ def _seed_inicio(db) -> dict:
             " %s, 'v1')",
             (pagos, text, march, legal, state, amount, currency, net_ars, usd, text, snap, cell),
         )
-    for text in ("cliente ars", "cliente ars sin usd"):
+    for text, legal in (("cliente usd", inc), ("cliente ars", sa), ("cliente ars sin usd", sa)):
         db.execute(
             "INSERT INTO payment (source_tab_id, block, row_key, series_order, month,"
             " legal_entity, snapshot_id, rules_version)"
             " VALUES (%s, 'Cliente', %s, 1, %s, %s, %s, 'v1')",
-            (pagos, text, march, sa, snap),
+            (pagos, text, march, legal, snap),
         )
     ids["tracker"] = db.execute(
         "INSERT INTO source_tab (source_id, sheet_id, name, class)"
@@ -498,32 +500,39 @@ def _seed_inicio(db) -> dict:
         " VALUES (%s, 3, now(), 120, 'lectura', %s, '{}', 1, 1, 1) RETURNING id",
         (ids["tracker"], f"{3:064x}"),
     ).fetchone()[0]
-    db.execute(
-        "INSERT INTO funding_milestone (source_tab_id, origin, block, row_key, program,"
-        " program_order, provisional_key, month, amount_usd, alias_source, alias_text,"
-        " snapshot_id, cell_ref, rules_version)"
-        " VALUES (%s, 'pagos', 'Fundings de AWS', 'cliente usd', 'Programa Ficticio',"
-        " 1, true, %s, 700, 'Pagos', 'cliente usd', %s, 'G6', 'v1')",
-        (pagos, march, snap),
-    )
-    # Paid in March with no "Pagos confirmados" total: that parity misses 300.
-    db.execute(
-        "INSERT INTO funding_milestone (source_tab_id, origin, block, row_key, program,"
-        " fund_claim_id, program_order, provisional_key, amount_usd, business_unit,"
-        " invoice_loaded, paid_on, alias_source, alias_text, snapshot_id, cell_ref,"
-        " rules_version)"
-        " VALUES (%s, 'tracker', 'FUNDINGS', 'cliente usd', 'Programa Ficticio', 'FC-0001', 1,"
-        " false, 300, 'Unidad Ficticia', true, %s, 'FUNDINGS', 'cliente usd', %s, 'C2', 'v1')",
-        (ids["tracker"], march + timedelta(days=14), tracker_snap),
-    )
+    last_march = date(YEAR - 1, 3, 1)
+    for order, month, amount, cell in ((1, march, 700, "G6"), (2, date(YEAR, 5, 1), 400, "I6"),
+                                       (3, last_march, 700, "G7")):  # fmt: skip
+        db.execute(
+            "INSERT INTO funding_milestone (source_tab_id, origin, block, row_key, program,"
+            " program_order, provisional_key, month, amount_usd, alias_source, alias_text,"
+            " snapshot_id, cell_ref, rules_version)"
+            " VALUES (%s, 'pagos', 'Fundings de AWS', 'cliente usd', 'Programa Ficticio',"
+            " %s, true, %s, %s, 'Pagos', 'cliente usd', %s, %s, 'v1')",
+            (pagos, order, month, amount, snap, cell),
+        )
+    # Paid in March (and last March) with no "Pagos confirmados" total: that parity misses 300.
+    for order, month, cell in ((1, march, "C2"), (2, last_march, "C3")):
+        db.execute(
+            "INSERT INTO funding_milestone (source_tab_id, origin, block, row_key, program,"
+            " fund_claim_id, program_order, provisional_key, amount_usd, business_unit,"
+            " invoice_loaded, paid_on, alias_source, alias_text, snapshot_id, cell_ref,"
+            " rules_version)"
+            " VALUES (%s, 'tracker', 'FUNDINGS', 'cliente usd', 'Programa Ficticio', %s, %s,"
+            " false, 300, 'Unidad Ficticia', true, %s, 'FUNDINGS', 'cliente usd', %s, %s, 'v1')",
+            (ids["tracker"], f"FC-000{order}", order, month + timedelta(days=14), tracker_snap,
+             cell),
+        )  # fmt: skip
     # "TOTAL PAGOS AWS" says 650 for the 700 of the Pagos milestone: that parity misses -50.
-    db.execute(
-        "INSERT INTO funding_total (source_tab_id, row_key, month, amount, snapshot_id,"
-        " cell_ref, rules_version) VALUES (%s, 'total pagos aws', %s, 650, %s, 'G1', 'v1')",
-        (pagos, march, snap),
-    )
+    for month, cell in ((march, "G1"), (last_march, "G2")):
+        db.execute(
+            "INSERT INTO funding_total (source_tab_id, row_key, month, amount, snapshot_id,"
+            " cell_ref, rules_version) VALUES (%s, 'total pagos aws', %s, 650, %s, %s, 'v1')",
+            (pagos, month, snap, cell),
+        )
     for key, kind in (("alias-1", "alias_sin_cliente"), ("alias-2", "alias_sin_cliente"),
-                      ("dup-1", "funding_duplicado")):  # fmt: skip
+                      ("dup-1", "funding_duplicado"),
+                      ("fila-1", "fila_sin_interpretar")):  # fmt: skip
         ids[key] = db.execute(
             "INSERT INTO issue (issue_type, stable_key, source_id, source_tab_id)"
             " VALUES (%s, %s, %s, %s) RETURNING id",
@@ -535,11 +544,24 @@ def _seed_inicio(db) -> dict:
         " (%s, 'ignorado', 'Revisora Ficticia', 'prueba')",
         (ids["alias-2"], ids["dup-1"]),
     )
+    # Resolved yesterday and seen again since: reopened, so it counts.
+    db.execute(
+        "INSERT INTO issue_resolution (issue_id, action, author, reason, created_at)"
+        " VALUES (%s, 'resuelto', 'Revisora Ficticia', 'prueba', now() - interval '1 day')",
+        (ids["fila-1"],),
+    )
     db.execute(
         "INSERT INTO system_event (kind, source_id, occurred_at, details)"
         " VALUES ('source_failed', %s, '2026-10-01 12:00-03', '{\"error\": \"Error Ficticio\"}')",
         (ids["a"],),
     )
+    # B fails after its last read, and a read of it is pending.
+    db.execute(
+        "INSERT INTO system_event (kind, source_id, details)"
+        " VALUES ('source_failed', %s, '{\"error\": \"Error Vigente\"}')",
+        (ids["b"],),
+    )
+    db.execute("INSERT INTO read_request (source_id, requested_by) VALUES (%s, 'cli')", (ids["b"],))
     return ids
 
 
@@ -551,9 +573,10 @@ def test_inicio_sums_each_month_in_usd(db, client):
     _seed_inicio(db)
     html = client.get("/").text
     march = _month_row(html, 3)
-    # Devengado 2000; facturado 1000 USD + the 100 USD of the ARS invoice, never its pesos.
+    # Devengado 2000; facturado 1000 USD + the 100 USD of the ARS invoice, never its pesos;
+    # cobrado the same, since both are paid.
     assert re.findall(r'<td class="num">([^<]*)</td>', march)[:3] == [
-        "2,000.00", "1,100.00", "100.00"
+        "2,000.00", "1,100.00", "1,100.00"
     ]  # fmt: skip
     assert "121,000" not in html and "50,000" not in html
     # The ARS invoice without its USD amount and its payment are counted apart, with a link.
@@ -569,7 +592,10 @@ def test_inicio_shows_twelve_months_and_a_total(db, client):
         assert f'<a href="/facturas?mes={YEAR}-{month:02d}">{YEAR}-{month:02d}</a>' in row
     assert '<td class="num">0.00</td>' in _month_row(html, 1)
     total = re.search(r'<tr class="total">(.*?)</tr>', html, re.S).group(1)
-    assert "2,000.00" in total and "1,100.00" in total and "1 factura, 1 cobro" in total
+    assert re.findall(r'<td class="num">([^<]*)</td>', total) == [
+        "2,000.00", "1,100.00", "1,100.00"
+    ]  # fmt: skip
+    assert "1 factura, 1 cobro" in total
 
 
 def test_inicio_keeps_fundings_apart_and_highlights_both_parities(db, client):
@@ -579,6 +605,9 @@ def test_inicio_keeps_fundings_apart_and_highlights_both_parities(db, client):
     fundings = html[html.index('id="fundings"') :]
     march = re.search(rf'<tr id="funding-{YEAR}-03">(.*?)</tr>', fundings, re.S).group(1)
     assert "700.00" in march
+    may = re.search(rf'<tr id="funding-{YEAR}-05">(.*?)</tr>', fundings, re.S).group(1)
+    assert "400.00" in may
+    assert f"<td>{YEAR - 1}-" not in fundings  # last year's parities stay out
     assert 'href="/fundings"' in fundings
     assert 'class="num parity-off">-300.00</td>' in fundings  # Pagos confirmados
     assert 'class="num parity-off">-50.00</td>' in fundings  # TOTAL PAGOS AWS
@@ -592,7 +621,8 @@ def test_inicio_counts_open_issues_by_type(db, client):
     assert '<a href="/problemas?tipo=color_desconocido">color_desconocido</a></td>' in html
     assert "funding_duplicado" not in html  # ignored: not open
     issues = html[html.index('id="problemas"') : html.index('id="fuentes"')]
-    assert re.findall(r'<td class="num">(\d+)</td>', issues) == ["1", "1"]
+    assert '<a href="/problemas?tipo=fila_sin_interpretar">' in issues  # reopened: open again
+    assert re.findall(r'<td class="num">(\d+)</td>', issues) == ["1", "1", "1"]
     # Every type the dashboard links to is accepted by the Problemas filter.
     assert client.get("/problemas?tipo=alias_sin_cliente").status_code == 200
 
@@ -610,7 +640,11 @@ def test_inicio_shows_each_source_last_read_and_error(db, client):
     html = client.get("/").text
     sources = html[html.index('id="fuentes"') :]
     assert "Planilla Ficticia A" in sources and "Planilla Ficticia B" in sources
-    assert "Error Ficticio" in sources and "2026-10-01 12:00:00" in sources
+    assert "Última lectura con cambios" in sources
+    # A's error came before its last read: shown, but not as current. B's is current.
+    assert '<span class="muted">2026-10-01 12:00:00: Error Ficticio</span>' in sources
+    assert re.search(r'<span class="warning">[^<]*: Error Vigente</span>', sources)
+    assert sources.count("pendiente desde") == 1
     assert 'href="/fuentes"' in sources
 
 
