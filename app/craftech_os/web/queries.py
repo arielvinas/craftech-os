@@ -334,3 +334,94 @@ def rows_without_client(conn: psycopg.Connection) -> list[dict]:
             " WHERE i.issue_type = 'alias_sin_cliente' AND i.status IN ('abierto', 'reabierto')"
             " ORDER BY s.title, t.name, i.details ->> 'text', i.id"
         ).fetchall()
+
+
+# The dashboard's twelve months of a year, January to December.
+YEAR_MONTHS = "SELECT make_date(%(year)s, m, 1) AS mes FROM generate_series(1, 12) m"
+OF_YEAR = "mes >= make_date(%(year)s, 1, 1) AND mes < make_date(%(year)s + 1, 1, 1)"
+
+
+def income_months(conn: psycopg.Connection, year: int) -> list[dict]:
+    """Accrued, invoiced and collected USD per month of the year. USD amounts as they are, ARS
+    ones by the USD amount the spreadsheet wrote (usd_inferido; a payment takes its invoice's);
+    the ARS ones without it are only counted."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            WITH months AS ({YEAR_MONTHS}),
+            accrued AS (SELECT mes, sum(monto_usd) AS usd FROM mcp.devengados GROUP BY mes),
+            invoiced AS (
+                SELECT mes, sum(CASE WHEN moneda = 'USD' THEN monto ELSE usd_inferido END) AS usd,
+                    count(*) FILTER (WHERE moneda <> 'USD' AND usd_inferido IS NULL) AS unconverted
+                FROM mcp.facturas GROUP BY mes
+            ),
+            collected AS (
+                SELECT c.mes,
+                    sum(CASE WHEN c.moneda = 'USD' THEN c.monto ELSE f.usd_inferido END) AS usd,
+                    count(*) FILTER (WHERE c.moneda <> 'USD' AND f.usd_inferido IS NULL)
+                        AS unconverted
+                FROM mcp.cobros c
+                JOIN mcp.facturas f ON f.pestaña_id = c.pestaña_id
+                    AND f.lectura_id = c.lectura_id AND f.celda = c.celda
+                GROUP BY c.mes
+            )
+            SELECT m.mes, coalesce(a.usd, 0) AS devengado, coalesce(i.usd, 0) AS facturado,
+                coalesce(c.usd, 0) AS cobrado,
+                coalesce(i.unconverted, 0) AS facturas_sin_convertir,
+                coalesce(c.unconverted, 0) AS cobros_sin_convertir
+            FROM months m
+            LEFT JOIN accrued a ON a.mes = m.mes
+            LEFT JOIN invoiced i ON i.mes = m.mes
+            LEFT JOIN collected c ON c.mes = m.mes
+            ORDER BY m.mes
+            """,
+            {"year": year},
+        ).fetchall()
+
+
+def funding_months(conn: psycopg.Connection, year: int) -> list[dict]:
+    """Funding milestones' USD per month of the year: never added to invoices (rule R15)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            WITH months AS ({YEAR_MONTHS})
+            SELECT m.mes, coalesce(sum(f.monto_usd), 0) AS monto_usd
+            FROM months m LEFT JOIN mcp.fundings f ON f.mes = m.mes
+            GROUP BY m.mes ORDER BY m.mes
+            """,
+            {"year": year},
+        ).fetchall()
+
+
+def funding_parity_of_year(conn: psycopg.Connection, year: int) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"SELECT * FROM mcp.paridad_fundings WHERE {OF_YEAR}"
+            " ORDER BY mes, planilla, unidad_negocio",
+            {"year": year},
+        ).fetchall()
+
+
+def funding_parity_aws_of_year(conn: psycopg.Connection, year: int) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"SELECT * FROM mcp.paridad_fundings_aws WHERE {OF_YEAR}"
+            " ORDER BY mes, planilla, pestaña",
+            {"year": year},
+        ).fetchall()
+
+
+def open_issue_counts(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT issue_type, count(*) AS cantidad FROM v_issue"
+            " WHERE status IN ('abierto', 'reabierto') GROUP BY issue_type ORDER BY issue_type"
+        ).fetchall()
+
+
+def source_reads(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT planilla, leido_en, lectura_pedida_en, ultimo_error_en, ultimo_error"
+            " FROM mcp.sources ORDER BY planilla"
+        ).fetchall()

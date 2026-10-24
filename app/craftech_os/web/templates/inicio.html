@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Inicio{% endblock %}
+{% macro unconverted(invoices, payments) -%}
+{%- set parts = [] -%}
+{%- if invoices %}{% set _ = parts.append(invoices ~ (" factura" if invoices == 1 else " facturas")) %}{% endif -%}
+{%- if payments %}{% set _ = parts.append(payments ~ (" cobro" if payments == 1 else " cobros")) %}{% endif -%}
+{{ parts | join(", ") }}
+{%- endmacro %}
+{% macro parity_table(rows, place_header) %}
+<table>
+  <thead><tr><th>Planilla</th><th>{{ place_header }}</th><th>Mes</th><th>Total de la planilla</th><th>Suma de fundings</th><th>Diferencia</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.planilla }}</td>
+      <td>{{ (r.unidad_negocio if "unidad_negocio" in r else r.pestaña) or "—" }}</td>
+      <td>{{ r.mes.strftime("%Y-%m") }}</td>
+      <td class="num">{{ r.total_planilla | money }}</td>
+      <td class="num">{{ r.suma_fundings | money }}</td>
+      <td class="num{% if r.diferencia %} parity-off{% endif %}">{{ r.diferencia | money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+{% block content %}
+<h1>Ingresos de {{ year }}</h1>
+<p class="muted">En USD: los montos en USD tal cual y los de ARS por el monto en USD que escribe la planilla. Lo que está en ARS sin ese monto no se suma: se cuenta en "Sin convertir".</p>
+<table>
+  <thead><tr><th>Mes</th><th>Devengado</th><th>Facturado</th><th>Cobrado, por mes de la factura</th><th>Sin convertir</th></tr></thead>
+  <tbody>
+    {% for m in months %}
+    {% set ym = m.mes.strftime("%Y-%m") %}
+    <tr id="mes-{{ ym }}">
+      <td><a href="/facturas?mes={{ ym }}">{{ ym }}</a></td>
+      <td class="num">{{ m.devengado | money }}</td>
+      <td class="num">{{ m.facturado | money }}</td>
+      <td class="num">{{ m.cobrado | money }}</td>
+      <td>{% if m.facturas_sin_convertir or m.cobros_sin_convertir %}<a href="/facturas?mes={{ ym }}">{{ unconverted(m.facturas_sin_convertir, m.cobros_sin_convertir) }}</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    <tr class="total">
+      <th>Total</th>
+      <td class="num">{{ months | sum(attribute="devengado") | money }}</td>
+      <td class="num">{{ months | sum(attribute="facturado") | money }}</td>
+      <td class="num">{{ months | sum(attribute="cobrado") | money }}</td>
+      <td>{{ unconverted(months | sum(attribute="facturas_sin_convertir"), months | sum(attribute="cobros_sin_convertir")) }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<section id="fundings">
+<h2><a href="/fundings">Fundings de AWS</a></h2>
+<p class="muted">Un funding no es una factura: no se suma con lo facturado (regla R15). Un funding que está en Pagos y en el tracker se cuenta dos veces.</p>
+<table>
+  <thead><tr><th>Mes</th><th>Fundings (USD)</th></tr></thead>
+  <tbody>
+    {% for f in funding_months %}
+    <tr id="funding-{{ f.mes.strftime("%Y-%m") }}">
+      <td>{{ f.mes.strftime("%Y-%m") }}</td>
+      <td class="num">{{ f.monto_usd | money }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h3>Paridad con Pagos confirmados</h3>
+{% if parity %}{{ parity_table(parity, "Unidad de negocio") }}{% else %}<p>No hay totales ni fundings pagados para comparar en {{ year }}.</p>{% endif %}
+<h3>Paridad con TOTAL PAGOS AWS</h3>
+{% if parity_aws %}{{ parity_table(parity_aws, "Pestaña") }}{% else %}<p>No hay totales ni fundings para comparar en {{ year }}.</p>{% endif %}
+</section>
+
+<section id="problemas">
+<h2><a href="/problemas">Problemas abiertos</a></h2>
+{% if issues %}
+<table>
+  <thead><tr><th>Tipo</th><th>Abiertos o reabiertos</th></tr></thead>
+  <tbody>
+    {% for i in issues %}
+    <tr>
+      <td><a href="/problemas?tipo={{ i.issue_type }}">{{ i.issue_type }}</a></td>
+      <td class="num">{{ i.cantidad }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay problemas abiertos.</p>
+{% endif %}
+</section>
+
+<section id="fuentes">
+<h2><a href="/fuentes">Planillas</a></h2>
+<table>
+  <thead><tr><th>Planilla</th><th>Última lectura</th><th>Lectura pedida</th><th>Último error</th></tr></thead>
+  <tbody>
+    {% for s in sources %}
+    <tr>
+      <td>{{ s.planilla }}</td>
+      <td>{{ s.leido_en | when }}</td>
+      <td>{% if s.lectura_pedida_en %}pendiente desde {{ s.lectura_pedida_en | when }}{% else %}—{% endif %}</td>
+      <td>{% if s.ultimo_error %}<span class="warning">{{ s.ultimo_error_en | when }}: {{ s.ultimo_error }}</span>{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</section>
+{% endblock %}
