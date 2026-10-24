@@ -68,17 +68,17 @@ Verificado en el repo el 24-oct-2026:
 
 ## Acceptance criteria
 
-- [ ] Abrir `/` muestra el tablero (código 200), sin redirigir a `/cambios`. El menú tiene un enlace "Inicio".
-- [ ] Con datos sintéticos de un mes que tiene una factura en USD y una factura en ARS con `usd_inferido`, el facturado del mes es la suma del monto en USD más el `usd_inferido`, y la factura en ARS no suma su monto en pesos.
-- [ ] Una factura en ARS sin `usd_inferido` no entra en el facturado de su mes y aparece contada en "sin convertir", con enlace a `/facturas?mes=<ese mes>`.
-- [ ] El cobro de una factura en ARS con `usd_inferido` suma ese monto en USD en el cobrado del mes de la factura, y el encabezado de la columna dice que el corte es por mes de la factura.
-- [ ] Se ven los doce meses del año en curso, incluidos los meses sin datos (en 0 o vacíos), y una fila de total.
-- [ ] Un funding del mismo mes que una factura no cambia el facturado de ese mes: aparece solo en el bloque de fundings.
-- [ ] Una diferencia distinta de 0 en la paridad con "Pagos confirmados" y otra en la paridad con "TOTAL PAGOS AWS" se ven resaltadas, cada una en su tabla. Captura de pantalla con datos de prueba.
-- [ ] Los problemas abiertos se cuentan por tipo y cada tipo enlaza a `/problemas` filtrado; un problema resuelto no se cuenta.
-- [ ] Cada planilla muestra su última lectura, y una planilla con un error registrado muestra el error y su fecha.
-- [ ] No hay ningún formulario en `/` ni ninguna ruta POST nueva en la app.
-- [ ] Después de abrir `/`, el log del servidor web no tiene nombres de clientes ni montos.
+- [x] Abrir `/` muestra el tablero (código 200), sin redirigir a `/cambios`. El menú tiene un enlace "Inicio".
+- [x] Con datos sintéticos de un mes que tiene una factura en USD y una factura en ARS con `usd_inferido`, el facturado del mes es la suma del monto en USD más el `usd_inferido`, y la factura en ARS no suma su monto en pesos.
+- [x] Una factura en ARS sin `usd_inferido` no entra en el facturado de su mes y aparece contada en "sin convertir", con enlace a `/facturas?mes=<ese mes>`.
+- [x] El cobro de una factura en ARS con `usd_inferido` suma ese monto en USD en el cobrado del mes de la factura, y el encabezado de la columna dice que el corte es por mes de la factura.
+- [x] Se ven los doce meses del año en curso, incluidos los meses sin datos (en 0 o vacíos), y una fila de total.
+- [x] Un funding del mismo mes que una factura no cambia el facturado de ese mes: aparece solo en el bloque de fundings.
+- [x] Una diferencia distinta de 0 en la paridad con "Pagos confirmados" y otra en la paridad con "TOTAL PAGOS AWS" se ven resaltadas, cada una en su tabla. Captura de pantalla con datos de prueba.
+- [x] Los problemas abiertos se cuentan por tipo y cada tipo enlaza a `/problemas` filtrado; un problema resuelto no se cuenta.
+- [x] Cada planilla muestra su última lectura, y una planilla con un error registrado muestra el error y su fecha.
+- [x] No hay ningún formulario en `/` ni ninguna ruta POST nueva en la app.
+- [x] Después de abrir `/`, el log del servidor web no tiene nombres de clientes ni montos.
 
 ## Out of scope
 
@@ -88,3 +88,47 @@ Verificado en el repo el 24-oct-2026:
 - Pantallas de cashflow, gastos o resultados (etapas C y D).
 - Migraciones o vistas nuevas en el esquema `mcp`.
 - Cualquier escritura desde la web, login o exponer la web fuera de 127.0.0.1.
+
+## Implementation
+
+Archivos:
+- `app/craftech_os/web/app.py`: `GET /` (función `inicio`) arma el tablero del año en curso (`date.today().year`, sin parámetros). `ISSUE_TYPES` pasa de 4 a los 11 tipos que acepta la base desde la migración 0009: sin eso, `/problemas?tipo=alias_sin_cliente` (y los otros 6 tipos nuevos) respondía 400 y los enlaces del tablero quedaban rotos.
+- `app/craftech_os/web/queries.py`: `income_months`, `funding_months`, `funding_parity_of_year`, `funding_parity_aws_of_year`, `open_issue_counts`, `source_reads`. Todas de solo lectura sobre `mcp.*` y `v_issue`, con el año como parámetro ligado. Los doce meses salen de `generate_series(1, 12)`, así que los meses sin datos aparecen en 0.
+- `app/craftech_os/web/templates/inicio.html` (nueva) y `base.html` (enlace "Inicio").
+- `app/tests/test_web.py`: `_seed_inicio` (datos sintéticos en marzo del año en curso) y 6 tests nuevos; el test de "todas las pantallas responden 200" ahora espera 200 en `/` en lugar de la redirección.
+
+Decisiones técnicas:
+- Criterio de moneda en SQL: `CASE WHEN moneda = 'USD' THEN monto ELSE usd_inferido END`. El cobro toma el `usd_inferido` de su factura uniendo `mcp.cobros` con `mcp.facturas` por pestaña, lectura y celda (el mismo join que ya usa `invoices`).
+- "Sin convertir" se muestra como "N factura(s), M cobro(s)" y enlaza a `/facturas?mes=<mes>`. Vacío cuando los dos son 0.
+- La fila de total se suma en la plantilla (doce filas).
+- Las paridades se filtran al año en curso; `/fundings` sigue mostrando todas.
+- La fila "Pagos confirmados" y la fila "TOTAL PAGOS AWS" usan la misma macro de tabla.
+
+Hallazgo para el producto: en `mcp.fundings` los hitos del tracker no tienen `mes` (la tabla exige mes solo para los de origen Pagos). Por eso la tabla "Fundings por mes" suma solo los hitos de Pagos, como pide el alcance ("la suma de `mcp.fundings.monto_usd` por mes"). Los del tracker se ven en las paridades. El tablero lo aclara en una nota y quedó registrado en `plan/improvements.md`.
+
+Verificado: lint, formato y la suite completa en verde; prueba de humo con datos sintéticos (captura en `plan/qa/evidence/T-017-inicio.png`) y contra la base local real. Con la base real `/` respondió 200 en unos 0,5 s, se vieron 12 meses, 10 celdas con `parity-off` y los 11 tipos de problema enlazados respondieron 200. El log de uvicorn solo tiene líneas de acceso, sin nombres ni montos.
+
+Cómo probar rápido: `cd app && TEST_DATABASE_URL=... uv run pytest tests/test_web.py -k inicio`.
+
+## Test plan
+
+1. Abrir `/`: responde 200, sin redirección; el menú muestra "Inicio" primero.
+2. Un mes con una factura en USD de 1000 y una en ARS de 121000 con `usd_inferido` 100: facturado 1,100.00; el monto en pesos no aparece en la página.
+3. Una factura en ARS sin `usd_inferido`, con su cobro: no suma, y "Sin convertir" dice "1 factura, 1 cobro" con enlace a `/facturas?mes=AAAA-MM`.
+4. Cobrado de la factura en ARS con `usd_inferido`: suma 100 en el mes de la factura; el encabezado dice "Cobrado, por mes de la factura".
+5. Doce filas de enero a diciembre del año en curso; los meses vacíos en 0.00; la fila Total suma las columnas.
+6. Un funding de Pagos de 700 en el mismo mes: el facturado no cambia; aparece solo en la tabla de fundings.
+7. Paridad con "Pagos confirmados" (hito del tracker pagado sin total, -300) y con "TOTAL PAGOS AWS" (650 contra 700, -50): las dos resaltadas con `parity-off`, cada una en su tabla.
+8. Problemas: un tipo abierto cuenta 1; uno resuelto y uno ignorado no aparecen; cada enlace `/problemas?tipo=<tipo>` responde 200 (incluidos los 7 tipos agregados a `ISSUE_TYPES`).
+9. Planillas: la que tiene un `source_failed` muestra fecha y error; una lectura pedida pendiente muestra "pendiente desde".
+10. Sin `<form>`, `<input>` ni `<button>` en `/`; el conjunto de rutas POST sigue siendo solo `leer-ahora`; el log del servidor no tiene nombres ni montos.
+
+Radio de impacto:
+- `base.html`: todas las pantallas cambian el menú.
+- `ISSUE_TYPES`: el desplegable de tipos de `/problemas` ahora lista 11 tipos y el filtro acepta los 7 nuevos.
+- `GET /` ya no redirige a `/cambios`: cualquier marcador o enlace a `/` cae en el tablero.
+- `queries.py` solo suma funciones; ninguna existente cambió.
+
+## Post-merge
+
+Ninguno: no hay migraciones, variables de entorno ni comandos nuevos. El contenedor web toma el código nuevo al reconstruir su imagen, como en cualquier ticket de la web.
