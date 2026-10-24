@@ -597,6 +597,14 @@ def test_inicio_counts_open_issues_by_type(db, client):
     assert client.get("/problemas?tipo=alias_sin_cliente").status_code == 200
 
 
+def test_the_problemas_filter_accepts_every_type_the_database_allows(db, client):
+    (check,) = db.execute(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+        " WHERE conname = 'issue_issue_type_check'"
+    ).fetchone()
+    assert set(web.ISSUE_TYPES) == set(re.findall(r"'(\w+)'", check))
+
+
 def test_inicio_shows_each_source_last_read_and_error(db, client):
     _seed_inicio(db)
     html = client.get("/").text
