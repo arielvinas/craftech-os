@@ -79,8 +79,8 @@ Verificado en el repo el 25-oct-2026:
 - [x] En las filas de «01. Sueldos» Detalle, Subdetalle y Equipo quedan nulos aunque la lectura los traiga, y ningún texto de esas celdas aparece en `issue.details` ni en `system_event.details` (test con un nombre sintético que se busca en las dos tablas).
 - [x] La pestaña DERIVADA "Consolidado" de «Budget por Area 2026 - Final» no se interpreta (test con las dos pestañas sembradas).
 - [x] Una segunda lectura reemplaza todos los movimientos de la pestaña (no se acumulan).
-- [ ] El evento `tab_interpreted` de Consolidado registra `duration_ms` y las cantidades, sin montos; el tiempo medido sobre la base local queda en la descripción del pedido de cambios.
-- [ ] `config/cashflow_rows.yaml` no tiene ningún monto, y las filas sin regla quedan listadas en la descripción del pedido de cambios.
+- [x] El evento `tab_interpreted` de Consolidado registra `duration_ms` y las cantidades, sin montos; el tiempo medido sobre la base local queda en la descripción del pedido de cambios.
+- [x] `config/cashflow_rows.yaml` no tiene ningún monto, y las filas sin regla quedan listadas en la descripción del pedido de cambios.
 - [x] Los tests usan solo datos sintéticos.
 
 ## Out of scope
