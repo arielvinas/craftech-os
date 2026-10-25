@@ -1,7 +1,7 @@
 ---
 id: T-018
 title: Movimientos de caja desde la pestaña Consolidado
-status: todo
+status: in-progress
 priority: high
 lane: core
 depends_on: []
