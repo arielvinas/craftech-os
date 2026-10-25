@@ -120,7 +120,9 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict | None, list]:
             continue
         fact = {role: _text(cell(role)) for role in ("bank", "rubro", "agrupador", *PRIVATE)}
         currency, movement_type = _text(cell("currency")), _text(cell("movement_type"))
-        private = normalize(fact["rubro"] or "") == normalize(SUELDOS) or movement_type == "Sueldos"
+        private = normalize(fact["rubro"] or "") == normalize(SUELDOS) or normalize(
+            movement_type or ""
+        ) == normalize("Sueldos")
         if private:
             fact.update(dict.fromkeys(PRIVATE))
         for role in NUMBERS:

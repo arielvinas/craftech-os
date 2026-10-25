@@ -205,10 +205,14 @@ def test_sueldos_keep_no_detail_and_no_name_reaches_problems_or_events(db, env, 
     unreadable = _row("GALICIA", "01. Sueldos", "sin dato", tipo="Sueldos", detalle=name)
     # Tipo Mov "Sueldos" under another rubro can name a person too.
     other_rubro = _row("GALICIA", "CCSS", tipo="Sueldos", agrupador=name, detalle=name)
-    _set(fake, 41, [HEADERS, sueldo, unreadable, other_rubro, _row("GALICIA")], "file-b")
+    lowercase = _row("GALICIA", "CCSS", tipo="sueldos", agrupador=name, detalle=name)
+    _set(
+        fake, 41, [HEADERS, sueldo, unreadable, other_rubro, lowercase, _row("GALICIA")], "file-b"
+    )  # fmt: skip
     _import(env)
     rows = _movements(db)
     assert [r[14:17] for r in rows] == [
+        (None, None, None),
         (None, None, None),
         (None, None, None),
         (None, None, None),
