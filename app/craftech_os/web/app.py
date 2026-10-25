@@ -33,7 +33,7 @@ ISSUE_TYPES = (
     "color_desconocido", "alineacion_ambigua", "valor_ilegible", "pestana_sin_clasificar",
     "alias_sin_cliente", "cotizacion_tipeada", "cotizacion_discrepante",
     "cotizacion_tipo_a_confirmar", "funding_duplicado", "identidad_en_revision",
-    "fila_sin_interpretar",
+    "fila_sin_interpretar", "cash_header_mismatch", "cash_unknown_bank", "cash_unmapped_rubro",
 )  # fmt: skip
 ISSUE_STATES = ("abierto", "resuelto", "ignorado", "reabierto")
 READ_RESULTS = {
