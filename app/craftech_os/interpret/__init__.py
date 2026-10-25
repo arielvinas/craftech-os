@@ -1,6 +1,6 @@
 """Facts of the last read of a tab (ADR-002): accruals from VENTAS; invoices, payments, churn,
 totals and funding milestones from Pagos; the same plus exchange rates from Pagos ARG; funding
-milestones from the FUNDINGS tracker.
+milestones from the FUNDINGS tracker; bank movements from Consolidado (ADR-003).
 
 Each tab with an interpreter has its facts replaced as a whole on every new read. Facts carry
 no client: the views resolve it through client_alias, so loading an alias needs no rerun.
@@ -12,7 +12,7 @@ import time
 import psycopg
 
 from craftech_os import clients, events
-from craftech_os.interpret import fundings, pagos, ventas
+from craftech_os.interpret import consolidado, fundings, pagos, ventas
 from craftech_os.issues import detect
 
 RULES_VERSION = "v0.9"
@@ -21,7 +21,10 @@ INTERPRETERS = {
     "Pagos": pagos.interpret,
     "Pagos ARG": pagos.interpret_arg,
     "FUNDINGS": fundings.interpret,
+    "Consolidado": consolidado.interpret,
 }
+# Tabs whose name other sheets use too: only the one of this sheet is interpreted.
+ONLY_IN = {"Consolidado": "Base informe Craftech "}
 COLUMNS = {
     "accrual": (
         "block",
@@ -91,6 +94,25 @@ COLUMNS = {
         "alias_text",
         "cell_ref",
     ),
+    "cash_movement": (
+        "row_key",
+        "cell_ref",
+        "month",
+        "bank",
+        "legal_entity",
+        "historical",
+        "adjustment",
+        "currency",
+        "amount",
+        "fx_rate",
+        "amount_usd",
+        "movement_type",
+        "rubro",
+        "agrupador",
+        "detalle",
+        "subdetalle",
+        "equipo",
+    ),
 }
 # Rule R28: a funding in the tracker and in Pagos is kept on both sides and reported. Pagos has
 # no opportunity column, so the same funding is the same amount for the same client: the same
@@ -115,6 +137,13 @@ DUPLICATES = """
 """
 
 
+def interpreter(title: str, name: str):
+    """The interpreter of the tab of this sheet, or None."""
+    if ONLY_IN.get(name, title) != title:
+        return None
+    return INTERPRETERS.get(name)
+
+
 def run(conn: psycopg.Connection, snapshot_id: int) -> dict | None:
     """Replace the facts of the tab of this snapshot with the ones in it.
 
@@ -130,10 +159,26 @@ def run(conn: psycopg.Connection, snapshot_id: int) -> dict | None:
         """,
         (snapshot_id,),
     ).fetchone()
-    interpret = INTERPRETERS.get(name)
+    interpret = interpreter(title, name)
     if interpret is None or tab_class != "CARGA" or not schema:
         return None
     facts, issues = interpret(doc, schema, title)
+    if facts is None:
+        # A read the interpreter cannot trust: its problems only, the last facts stay.
+        with conn.transaction():
+            for issue_type, key, details in issues:
+                detect.upsert(conn, issue_type, f"{tab_id}:{key}", source_id, tab_id, details)
+            duration_ms = round((time.monotonic() - started) * 1000)
+            events.record(
+                conn,
+                "tab_interpreted",
+                source_id=source_id,
+                source_tab_id=tab_id,
+                duration_ms=duration_ms,
+                snapshot_id=snapshot_id,
+                issues=len(issues),
+            )
+        return {"issues": len(issues), "duration_ms": duration_ms}
     source = f"{title} / {name}"
     alias_source = clients.alias_source(source)
     for table in ("accrual", "invoice", "client_churn", "funding_milestone"):
@@ -199,6 +244,7 @@ def run(conn: psycopg.Connection, snapshot_id: int) -> dict | None:
             payments=counts["payment"],
             churn=counts["client_churn"],
             fundings=counts["funding_milestone"],
+            movements=counts["cash_movement"],
             issues=counts["issues"],
         )
     return {**counts, "duration_ms": duration_ms}

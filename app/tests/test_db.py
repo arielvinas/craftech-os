@@ -10,6 +10,7 @@ from craftech_os.migrate import MIGRATIONS_DIR, MigrationError, migrate
 TABLES = [
     "accrual",
     "annotation",
+    "cash_movement",
     "cell_change",
     "client",
     "client_alias",
@@ -47,6 +48,7 @@ MIGRATIONS = [
     "0011_fundings.sql",
     "0012_cei_aws_parity.sql",
     "0013_fundings_collection_cut.sql",
+    "0014_cash_movement.sql",
 ]
 
 
@@ -124,6 +126,7 @@ def test_load_real_config_twice_without_duplicates(db):
         " WHERE t.schema IS NOT NULL ORDER BY s.title, t.name"
     ).fetchall()
     assert [(title[:13], name, cls) for title, name, cls in with_schema] == [
+        ("Base informe ", "Consolidado", "CARGA"),
         ("Facturación -", "Pagos", "CARGA"),
         ("Facturación -", "Pagos ARG", "CARGA"),
         ("Facturación -", "VENTAS", "CARGA"),

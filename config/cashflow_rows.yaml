@@ -1,0 +1,115 @@
+# Rows of the Resumen tab of "CASH FLOW MENSUAL" and which bank movements of the Consolidado tab
+# of "Base informe Craftech " add up in each (ADR-003). Labels only, never amounts.
+#
+# A row adds the movements whose rubro is in `rubros`, whose agrupador is in `agrupadores` and
+# whose bank is in `banks`, each only when given. A row with none of them has no rule ("sin
+# regla"): what is not ratified by Emi and Ro is kept, not interpreted. A rubro or agrupador that
+# no rule names opens cash_unmapped_rubro.
+#
+# Cargas sociales are rubro "01. Sueldos" with agrupador "CCSS" (only Argentine or hybrid staff):
+# the Resumen has no row of their own, so they add up in "Gastos" of Argentina.
+
+banks:
+  # "Caja" is Caja Córdoba.
+  sa: &sa ["GALICIA", "Macro", "Credicoop", "Caja"]
+  inc: &inc ["MERCURY", "Mesh"]
+
+# Without "01. Sueldos": Craftech Inc. has a row of its own for them. A list inside a list is
+# flattened, so Argentina adds them with ["01. Sueldos", *expenses].
+expense_rubros: &expenses
+  - "01.a. Gastos al personal"
+  - "03. Obra social"
+  - "04. Alquileres"
+  - "04.a. Gs de mantenimiento"
+  - "05. Marketing"
+  - "06. Capacitación"
+  - "07. Sist. y Proc. Datos"
+  - "08. Comunicaciones"
+  - "09. Honorarios profesionales"
+  - "10. Comercial"
+  - "12. Refrigerios y comidas"
+  - "13. Limpieza"
+  - "14. Electricidad"
+  - "15. Agua"
+  - "16. Gastos Bancarios"
+  - "17. Seguros"
+  - "18. Tasas municipales"
+  - "19. Impuestos"
+  - "20. IVA"
+  - "21. Impuesto a las Gcias"
+  - "22. Interes Plan de Pago"
+  - "23. Viaje a LP"
+  - "24. Viaje a CBA"
+  - "25. Evento Fin de año"
+  - "26. Atenciones y agasajos"
+  - "28. Marketing RRHH"
+  - "ACTIVOS. Equipamiento"
+  - "ACTIVOS. Instalaciones"
+  - "ACTIVOS. Muebles y útiles"
+
+blocks:
+  - name: "Argentina en miles de pesos"
+    resumen: "ARGENTINA"
+    unit: miles_ars
+    rows:
+      - label: "Saldo Inicial"
+      - label: "$ recibidos de la INC"
+        rubros: ["CAJA. Intercompany"]
+        banks: *sa
+      - label: "Pagos Recibidos S.A."
+        rubros: ["COBRANZA"]
+        banks: *sa
+      - label: "Subtotal ingresos"
+      - label: "Gastos"
+        rubros: ["01. Sueldos", *expenses]
+        banks: *sa
+      - label: "Saldo Final"
+      - label: "Ventas en $"
+      - label: "Gastos en $"
+
+  - name: "Saldo final en dólares"
+    resumen: "ARGENTINA"
+    unit: usd
+    rows:
+      - label: "Saldo Final en USD"
+
+  - name: "Craftech Inc. en dólares"
+    resumen: "CASH FLOW USA"
+    unit: usd
+    rows:
+      - label: "Saldo Inicial"
+      - label: "Pagos Recibidos INC"
+        rubros: ["COBRANZA"]
+        banks: *inc
+      - label: "Subtotal ingresos"
+      - label: "USD enviados a la S.A."
+        rubros: ["CAJA. Intercompany"]
+        banks: *inc
+      - label: "Sueldos"
+        rubros: ["01. Sueldos"]
+        banks: *inc
+      - label: "Gastos"
+        rubros: *expenses
+        banks: *inc
+      - label: "Saldo Final"
+
+  - name: "Craftech Inc. con pagos proyectados"
+    resumen: "CASH FLOW USA CON PAGOS PROYECTADOS"
+    unit: usd
+    rows:
+      - label: "Saldo Inicial"
+      - label: "Pagos Recibidos INC"
+      - label: "Subtotal ingresos"
+      - label: "USD enviados a la S.A."
+      - label: "Sueldos"
+      - label: "Gastos"
+      - label: "Saldo Final"
+
+  - name: "Diferencia entre proyectado y real"
+    resumen: "CONTROL CASH FLOW REAL CON PROYECTADO"
+    unit: usd
+    rows:
+      - label: "Dif Cash Flow Proyectado Vs Real"
+      - label: "Pagos Proyectados Craftech"
+      - label: "Pagos Proyectados Sleakops"
+      - label: "Dif planilla de facturacion vs cash flow"

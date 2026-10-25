@@ -6,7 +6,7 @@ import psycopg
 import yaml
 
 from craftech_os.diff.compare import column_index
-from craftech_os.interpret import INTERPRETERS, fundings
+from craftech_os.interpret import consolidado, fundings, interpreter
 
 CLASSES = ("CARGA", "DERIVADA", "HISTORICA", "IGNORAR", "A_CONFIRMAR", "SIN_CLASIFICAR")
 SOURCES_FILE = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
@@ -29,11 +29,12 @@ def _class(value, what: str) -> str:
     return value
 
 
-def _schema(value, what: str) -> dict:
+def _schema(value, what: str, name: str) -> dict:
     """A tab schema: header text, key column, block openers and the month grid columns.
 
-    Pagos also names its funding blocks and the row that totals them; the FUNDINGS tracker maps
-    roles to header texts.
+    Pagos also names its funding blocks and the row that totals them; the FUNDINGS tracker and
+    Consolidado map roles to header texts, and Consolidado maps each bank to its legal entity,
+    "historical" or "adjustment".
     """
     if not isinstance(value, dict) or not {"header", "key"} <= set(value):
         raise SourcesError(f"{what}: a schema needs 'header' and 'key'")
@@ -45,6 +46,7 @@ def _schema(value, what: str) -> dict:
         "funding_blocks",
         "funding_total",
         "columns",
+        "banks",
     }
     if unknown:
         raise SourcesError(f"{what}: unknown schema keys {sorted(unknown)}")
@@ -72,9 +74,17 @@ def _schema(value, what: str) -> dict:
             raise SourcesError(f"{what}: columns must map roles to header texts")
         for role, text in columns.items():
             _name(text, f"{what} column {role!r}")
-        missing = sorted(set(fundings.REQUIRED) - set(columns))
+        required = consolidado.COLUMNS if name == "Consolidado" else fundings.REQUIRED
+        missing = sorted(set(required) - set(columns))
         if missing:
             raise SourcesError(f"{what}: columns needs {missing}")
+    if name == "Consolidado" or "banks" in value:
+        banks = value.get("banks")
+        if not isinstance(banks, dict) or not banks:
+            raise SourcesError(f"{what}: banks must map each bank to its legal entity")
+        for bank, kind in banks.items():
+            _name(bank, f"{what} bank")
+            _name(kind, f"{what} legal entity of {bank!r}")
     return value
 
 
@@ -164,10 +174,14 @@ def parse(text: str) -> list[dict]:
         for name, schema in schemas.items():
             if name not in seen:
                 raise SourcesError(f"{title!r}: schema for {name!r}, a tab not listed in 'tabs'")
-            _schema(schema, f"{title!r} schema of {name!r}")
+            _schema(schema, f"{title!r} schema of {name!r}", name)
         for name, cls in tabs:
             schema = schemas.get(name, {})
-            if cls == "CARGA" and name in INTERPRETERS and not {"grid", "columns"} & set(schema):
+            if (
+                cls == "CARGA"
+                and interpreter(title, name)
+                and not {"grid", "columns"} & set(schema)
+            ):
                 raise SourcesError(
                     f"{title!r}: {name!r} is interpreted"
                     " and needs a schema with 'grid' or 'columns'"

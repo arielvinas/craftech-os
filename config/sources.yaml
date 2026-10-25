@@ -274,6 +274,45 @@ sources:
         - "Viajes Marketing/Comercial"
         - "Sleakops"
         - "Sleakops - ajuste"
+    schemas:
+      # Its A1 formula gathers the tab of each bank and the adjustment tabs (ADR-003): those
+      # tabs are not interpreted. The 17 headers must be these, in this order.
+      "Consolidado":
+        header: "Mes Corriente"
+        key: A
+        columns:
+          month: "Mes Corriente"
+          origin: "Origen"
+          bank: "Bank"
+          tipo_erogacion: "Tipo Erogacion"
+          frecuencia: "Frecuencia"
+          movement_type: "Tipo Mov"
+          rubro: "Rubro"
+          agrupador: "Agrupador"
+          equipo: "Equipo"
+          currency: "Moneda"
+          amount: "Amount"
+          fx_rate: "TC"
+          amount_usd: "Amount USD"
+          detalle: "Detalle"
+          subdetalle: "Subdetalle"
+          area: "Area"
+          tipo_gasto: "Tipo gasto"
+        # Ratified rule of accounts: each bank is of a legal entity (its name in legal_entity),
+        # historical (VETA and crypto) or an adjustment tab (CLIENTES and AFIP, no entity).
+        banks:
+          "GALICIA": "Craftech S.A."
+          "Macro": "Craftech S.A."
+          "Credicoop": "Craftech S.A."
+          "Caja": "Craftech S.A."  # Caja Córdoba
+          "MERCURY": "Craftech-io Inc."
+          "Mesh": "Craftech-io Inc."
+          "VETA ARG": historical
+          "VETA USD": historical
+          "CRYPTO": historical
+          "Caja Crypto": historical
+          "CLIENTES": adjustment
+          "AFIP": adjustment
 
   - title: "Proyeccion sueldos"
     drive_id: "1cwkrNg_SWDDDy_H_zsAqE05wOUFR-9XDVF42-IUvnb0"
