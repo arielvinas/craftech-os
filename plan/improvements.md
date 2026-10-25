@@ -58,3 +58,4 @@
 - [ ] [ui] El año del tablero de inicio sale de date.today() del host, no de la zona horaria de Craftech; misma clase que T-014 F2 — QA T-017 r1 (F4)
 - [ ] [privacidad] Tipo Mov «sueldos» en minúscula con rubro distinto de «01. Sueldos» conserva el Detalle; normalizar el Tipo Mov antes de vaciar — QA T-018 r1 (F1)
 - [ ] [docs] Comentarios de la migración 0014 y de config/cashflow_rows.yaml dicen que se revisa el agrupador, pero el código solo mira el rubro — QA T-018 r1 (F2)
+- [ ] [datos] La transferencia Mercury→Mesh solo se reconoce si el texto es exactamente «MERCURY» — QA T-018 r1 (F3)
