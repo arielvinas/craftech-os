@@ -57,3 +57,4 @@
 - [ ] [observability] mcp.sources no tiene la fecha de la última lectura buena cuando la planilla no cambió, y ultimo_error no dice si el error ya pasó: el tablero y /fuentes no pueden mostrar si una planilla falla hoy (el tablero solo grisa el error anterior a leido_en) — QA T-017 r1 (F3)
 - [ ] [ui] El año del tablero de inicio sale de date.today() del host, no de la zona horaria de Craftech; misma clase que T-014 F2 — QA T-017 r1 (F4)
 - [ ] [privacidad] Tipo Mov «sueldos» en minúscula con rubro distinto de «01. Sueldos» conserva el Detalle; normalizar el Tipo Mov antes de vaciar — QA T-018 r1 (F1)
+- [ ] [docs] Comentarios de la migración 0014 y de config/cashflow_rows.yaml dicen que se revisa el agrupador, pero el código solo mira el rubro — QA T-018 r1 (F2)
