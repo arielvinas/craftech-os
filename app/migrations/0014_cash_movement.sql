@@ -1,7 +1,7 @@
 -- Bank movements of the Consolidado tab of "Base informe Craftech " (ADR-003): one row per row
--- of the tab, replaced as a whole on every new read. Rubro "01. Sueldos" keeps no Detalle,
--- Subdetalle or Equipo: they can hold names of people. craftech_app owns the table; nothing is
--- granted to mcp_reader yet (the MCP views are T-019).
+-- of the tab, replaced as a whole on every new read. Rubro "01. Sueldos" and Tipo Mov "Sueldos"
+-- keep no Detalle, Subdetalle or Equipo: they can hold names of people. craftech_app owns the
+-- table; nothing is granted to mcp_reader yet (the MCP views are T-019).
 
 CREATE TABLE cash_movement (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -30,11 +30,11 @@ CREATE TABLE cash_movement (
     UNIQUE (source_tab_id, row_key),
     CHECK (legal_entity IS NULL OR NOT (historical OR adjustment)),
     CONSTRAINT cash_movement_sueldos_without_detail CHECK (
-        rubro IS DISTINCT FROM '01. Sueldos'
+        (rubro IS DISTINCT FROM '01. Sueldos' AND movement_type IS DISTINCT FROM 'Sueldos')
         OR (detalle IS NULL AND subdetalle IS NULL AND equipo IS NULL))
 );
 
-COMMENT ON TABLE cash_movement IS 'Movimiento bancario: una fila de la pestaña Consolidado de «Base informe Craftech », que junta las pestañas de cada banco y las de ajuste (ADR-003). Se reemplaza entero en cada lectura nueva de la pestaña; una lectura con otros encabezados no se interpreta y quedan los movimientos de la anterior. En el rubro «01. Sueldos» no se guardan Detalle, Subdetalle ni Equipo, porque pueden traer nombres de personas: los sueldos van solo como total.';
+COMMENT ON TABLE cash_movement IS 'Movimiento bancario: una fila de la pestaña Consolidado de «Base informe Craftech », que junta las pestañas de cada banco y las de ajuste (ADR-003). Se reemplaza entero en cada lectura nueva de la pestaña; una lectura con otros encabezados no se interpreta y quedan los movimientos de la anterior. En el rubro «01. Sueldos» y en el tipo de movimiento Sueldos no se guardan Detalle, Subdetalle ni Equipo, porque pueden traer nombres de personas: los sueldos van solo como total.';
 COMMENT ON COLUMN cash_movement.id IS 'Identificador interno.';
 COMMENT ON COLUMN cash_movement.source_tab_id IS 'Pestaña de la que sale.';
 COMMENT ON COLUMN cash_movement.snapshot_id IS 'Lectura de la que sale.';
@@ -53,9 +53,9 @@ COMMENT ON COLUMN cash_movement.amount_usd IS 'Monto en dólares ("Amount USD"),
 COMMENT ON COLUMN cash_movement.movement_type IS 'Tipo de movimiento ("Tipo Mov"): Egresos, Sueldos, Ingresos, Impuestos, Ingresos financieros o Dividendos; Interno para la transferencia de Mercury a Mesh (rubro «CAJA. Mesh», agrupador MESH), que no se cuenta dos veces porque el gasto se registra en Mesh. Nulo si la celda trae otra cosa (problema fila_sin_interpretar).';
 COMMENT ON COLUMN cash_movement.rubro IS 'Rubro ("Rubro"), tal como está en la celda; config/cashflow_rows.yaml dice en qué fila del cashflow suma.';
 COMMENT ON COLUMN cash_movement.agrupador IS 'Agrupador ("Agrupador"), tal como está en la celda; en «01. Sueldos», CCSS son las cargas sociales.';
-COMMENT ON COLUMN cash_movement.detalle IS 'Detalle ("Detalle"); siempre nulo en el rubro «01. Sueldos».';
-COMMENT ON COLUMN cash_movement.subdetalle IS 'Subdetalle ("Subdetalle"); siempre nulo en el rubro «01. Sueldos».';
-COMMENT ON COLUMN cash_movement.equipo IS 'Equipo ("Equipo"); siempre nulo en el rubro «01. Sueldos».';
+COMMENT ON COLUMN cash_movement.detalle IS 'Detalle ("Detalle"); siempre nulo en el rubro «01. Sueldos» y en el tipo de movimiento Sueldos.';
+COMMENT ON COLUMN cash_movement.subdetalle IS 'Subdetalle ("Subdetalle"); siempre nulo en el rubro «01. Sueldos» y en el tipo de movimiento Sueldos.';
+COMMENT ON COLUMN cash_movement.equipo IS 'Equipo ("Equipo"); siempre nulo en el rubro «01. Sueldos» y en el tipo de movimiento Sueldos.';
 
 ALTER TABLE issue DROP CONSTRAINT issue_issue_type_check;
 ALTER TABLE issue ADD CONSTRAINT issue_issue_type_check CHECK (issue_type IN

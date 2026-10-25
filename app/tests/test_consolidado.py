@@ -203,10 +203,13 @@ def test_sueldos_keep_no_detail_and_no_name_reaches_problems_or_events(db, env, 
         subdetalle=name, equipo=name,
     )  # fmt: skip
     unreadable = _row("GALICIA", "01. Sueldos", "sin dato", tipo="Sueldos", detalle=name)
-    _set(fake, 41, [HEADERS, sueldo, unreadable, _row("GALICIA")], "file-b")
+    # Tipo Mov "Sueldos" under another rubro can name a person too.
+    other_rubro = _row("GALICIA", "CCSS", tipo="Sueldos", agrupador=name, detalle=name)
+    _set(fake, 41, [HEADERS, sueldo, unreadable, other_rubro, _row("GALICIA")], "file-b")
     _import(env)
     rows = _movements(db)
     assert [r[14:17] for r in rows] == [
+        (None, None, None),
         (None, None, None),
         (None, None, None),
         ("Detalle Ficticio", "Subdetalle Ficticio", "Equipo Ficticio"),
@@ -223,14 +226,18 @@ def test_sueldos_keep_no_detail_and_no_name_reaches_problems_or_events(db, env, 
     assert (in_issues, in_events) == (0, 0)
 
 
-def test_the_database_rejects_a_sueldos_row_with_detail(db, env, fake):
+@pytest.mark.parametrize(
+    "rubro, movement_type", [("01. Sueldos", "Egresos"), ("04. Alquileres", "Sueldos")]
+)
+def test_the_database_rejects_a_sueldos_row_with_detail(db, env, fake, rubro, movement_type):
     _import(env)
     with pytest.raises(psycopg.errors.CheckViolation):
         db.execute(
             "INSERT INTO cash_movement (source_tab_id, snapshot_id, rules_version, row_key,"
-            " cell_ref, month, bank, historical, adjustment, rubro, equipo)"
+            " cell_ref, month, bank, historical, adjustment, rubro, movement_type, equipo)"
             " SELECT source_tab_id, snapshot_id, rules_version, 'fila 99', 'K99', month, bank,"
-            " false, false, '01. Sueldos', 'Equipo Ficticio' FROM cash_movement LIMIT 1"
+            " false, false, %s, %s, 'Equipo Ficticio' FROM cash_movement LIMIT 1",
+            (rubro, movement_type),
         )
 
 

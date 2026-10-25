@@ -3,9 +3,9 @@
 The tab gathers the tab of each bank and the adjustment tabs, so only it is read. Its 17
 headers must be the ones of the schema, in order: other headers leave the last movements as
 they are. The schema maps each bank to its legal entity (ratified rule of accounts), to
-"historical" or to "adjustment". Rubro "01. Sueldos" keeps no Detalle, Subdetalle or Equipo:
-they can hold names of people. Problems carry banks, rubros, row numbers and cell references,
-never amounts or details.
+"historical" or to "adjustment". Rubro "01. Sueldos" and Tipo Mov "Sueldos" keep no Detalle,
+Subdetalle or Equipo: they can hold names of people. Problems carry banks, rubros, row numbers
+and cell references, never amounts or details.
 """
 
 from pathlib import Path
@@ -119,14 +119,15 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict | None, list]:
             issues.append(("fila_sin_interpretar", name, {"cell_ref": ref("month")}))
             continue
         fact = {role: _text(cell(role)) for role in ("bank", "rubro", "agrupador", *PRIVATE)}
-        if normalize(fact["rubro"] or "") == normalize(SUELDOS):
+        currency, movement_type = _text(cell("currency")), _text(cell("movement_type"))
+        private = normalize(fact["rubro"] or "") == normalize(SUELDOS) or movement_type == "Sueldos"
+        if private:
             fact.update(dict.fromkeys(PRIVATE))
         for role in NUMBERS:
             fact[role] = number(cell(role) or {})
             if fact[role] is None and unreadable(cell(role) or {}):
                 key = f"{name}:{schema['columns'][role]}"
                 issues.append(("valor_ilegible", key, {"cell_ref": ref(role)}))
-        currency, movement_type = _text(cell("currency")), _text(cell("movement_type"))
         if currency not in CURRENCIES:
             key = f"{name}:{schema['columns']['currency']}"
             issues.append(("fila_sin_interpretar", key, {"cell_ref": ref("currency")}))
@@ -142,7 +143,7 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict | None, list]:
             unknown_banks.setdefault(fact["bank"] or "[vacio]", []).append(ref("bank"))
         if movement_type != "Interno" and normalize(fact["rubro"] or "") not in known:
             unmapped.setdefault(fact["rubro"] or "[vacio]", []).append(
-                (fact["agrupador"], ref("rubro"))
+                (None if private else fact["agrupador"], ref("rubro"))
             )
         movements.append(
             {
