@@ -69,19 +69,19 @@ Verificado en el repo el 25-oct-2026:
 
 ## Acceptance criteria
 
-- [ ] La migración 0014 crea `cash_movement` con `COMMENT ON` en castellano en la tabla y en cada columna, y la base rechaza una fila de «01. Sueldos» con Detalle, Subdetalle o Equipo no nulos.
-- [ ] `issue_issue_type_check` acepta `cash_header_mismatch`, `cash_unknown_bank` y `cash_unmapped_rubro`, y `ISSUE_TYPES` de la web los incluye; el test que compara los dos sigue pasando.
-- [ ] Una lectura sintética de Consolidado con encabezados correctos produce un movimiento por fila con mes, banco, entidad, moneda, monto, tipo de cambio, monto en dólares, tipo de movimiento, rubro y agrupador.
-- [ ] Galicia, Macro, Credicoop y Caja Córdoba quedan en 'Craftech S.A.'; Mercury y Mesh en 'Craftech-io Inc.'; VETA y cripto marcados como históricos; CLIENTES y AFIP marcados como ajuste.
-- [ ] Un banco fuera de la lista abre `cash_unknown_bank` y su fila queda sin entidad.
-- [ ] Una lectura con otros encabezados abre `cash_header_mismatch`, no toca los movimientos de la lectura anterior y no inserta filas.
-- [ ] Un rubro sin regla en `config/cashflow_rows.yaml` abre `cash_unmapped_rubro`.
-- [ ] En las filas de «01. Sueldos» Detalle, Subdetalle y Equipo quedan nulos aunque la lectura los traiga, y ningún texto de esas celdas aparece en `issue.details` ni en `system_event.details` (test con un nombre sintético que se busca en las dos tablas).
-- [ ] La pestaña DERIVADA "Consolidado" de «Budget por Area 2026 - Final» no se interpreta (test con las dos pestañas sembradas).
-- [ ] Una segunda lectura reemplaza todos los movimientos de la pestaña (no se acumulan).
+- [x] La migración 0014 crea `cash_movement` con `COMMENT ON` en castellano en la tabla y en cada columna, y la base rechaza una fila de «01. Sueldos» con Detalle, Subdetalle o Equipo no nulos.
+- [x] `issue_issue_type_check` acepta `cash_header_mismatch`, `cash_unknown_bank` y `cash_unmapped_rubro`, y `ISSUE_TYPES` de la web los incluye; el test que compara los dos sigue pasando.
+- [x] Una lectura sintética de Consolidado con encabezados correctos produce un movimiento por fila con mes, banco, entidad, moneda, monto, tipo de cambio, monto en dólares, tipo de movimiento, rubro y agrupador.
+- [x] Galicia, Macro, Credicoop y Caja Córdoba quedan en 'Craftech S.A.'; Mercury y Mesh en 'Craftech-io Inc.'; VETA y cripto marcados como históricos; CLIENTES y AFIP marcados como ajuste.
+- [x] Un banco fuera de la lista abre `cash_unknown_bank` y su fila queda sin entidad.
+- [x] Una lectura con otros encabezados abre `cash_header_mismatch`, no toca los movimientos de la lectura anterior y no inserta filas.
+- [x] Un rubro sin regla en `config/cashflow_rows.yaml` abre `cash_unmapped_rubro`.
+- [x] En las filas de «01. Sueldos» Detalle, Subdetalle y Equipo quedan nulos aunque la lectura los traiga, y ningún texto de esas celdas aparece en `issue.details` ni en `system_event.details` (test con un nombre sintético que se busca en las dos tablas).
+- [x] La pestaña DERIVADA "Consolidado" de «Budget por Area 2026 - Final» no se interpreta (test con las dos pestañas sembradas).
+- [x] Una segunda lectura reemplaza todos los movimientos de la pestaña (no se acumulan).
 - [ ] El evento `tab_interpreted` de Consolidado registra `duration_ms` y las cantidades, sin montos; el tiempo medido sobre la base local queda en la descripción del pedido de cambios.
 - [ ] `config/cashflow_rows.yaml` no tiene ningún monto, y las filas sin regla quedan listadas en la descripción del pedido de cambios.
-- [ ] Los tests usan solo datos sintéticos.
+- [x] Los tests usan solo datos sintéticos.
 
 ## Out of scope
 
@@ -89,3 +89,84 @@ Verificado en el repo el 25-oct-2026:
 - La paridad contra el Resumen (T-020) y la pantalla `/caja` (T-021).
 - La interpretación incremental (solo si el tiempo medido pasa de 10 segundos, y en otro ticket).
 - El motor de proyección, escenarios, «Pagos en disputa», las facturas argentinas en el cashflow, budget y resultado, y la API de Mercury.
+
+## Implementation
+
+Archivos:
+- `app/migrations/0014_cash_movement.sql`: tabla `cash_movement` con `COMMENT ON` en castellano en la tabla y cada columna. Tiene `CHECK` de moneda (ARS, USD, USDC), de tipo de movimiento (los 6 de la pestaña más `Interno`) y de mes en día 1. Un `CHECK` impide que una fila histórica o de ajuste tenga entidad. La restricción `cash_movement_sueldos_without_detail` impide Detalle, Subdetalle o Equipo no nulos si el rubro es «01. Sueldos» **o** el tipo de movimiento es Sueldos. También redefine `issue_issue_type_check` (los 11 tipos anteriores más los 3 `cash_*`) y actualiza los comentarios de `issue.issue_type`, `issue.stable_key` y `mcp.issues.tipo`.
+- `app/craftech_os/interpret/consolidado.py` (nuevo): valida los 17 encabezados antes de leer filas y saca la entidad del mapa `banks` del esquema. La transferencia de Mercury a Mesh (banco MERCURY, rubro «CAJA. Mesh», agrupador MESH) pasa a tipo `Interno`. En las filas privadas vacía Detalle, Subdetalle y Equipo antes de construir el movimiento. Los bancos desconocidos y los rubros sin regla se agrupan: un problema por banco o por rubro, con la cantidad de filas y la primera celda.
+- `app/craftech_os/interpret/__init__.py`: registra "Consolidado" con `ONLY_IN`, así que el intérprete solo corre si el título de la planilla es «Base informe Craftech ». Si los encabezados no coinciden, registra los problemas y el evento y no borra nada. El evento `tab_interpreted` suma `movements`.
+- `app/craftech_os/sources.py`: el esquema de Consolidado exige las 17 columnas y un mapa `banks` no vacío. El chequeo de "CARGA con intérprete" usa el mismo despacho por título.
+- `config/sources.yaml`: el esquema de Consolidado (17 columnas y bancos). `config/cashflow_rows.yaml` (nuevo): bloques y filas del Resumen, solo etiquetas.
+- `app/craftech_os/web/app.py`: los 3 tipos nuevos en `ISSUE_TYPES`.
+- `app/tests/test_consolidado.py` (16 tests, datos sintéticos) y `app/tests/test_db.py` (listas de tablas, migraciones y pestañas con esquema).
+
+Decisiones técnicas:
+- **Sueldos también por tipo de movimiento:** en la lectura real hay 85 filas con Tipo Mov "Sueldos" bajo otros rubros que traían Detalle: CCSS (37), «19. Impuestos» (29), «06. Capacitación» (8), «10. Comercial» (5), «21. Impuesto a las Gcias» (3), «09. Honorarios profesionales» (2) y «07. Sist. y Proc. Datos» (1). El alcance solo nombraba el rubro «01. Sueldos». Se vacían igual, para no guardar nombres, y la restricción de la base cubre los dos casos. **Lo tienen que ratificar Emi o Ro.**
+- En las filas privadas, el agrupador no va al `details` del problema `cash_unmapped_rubro`, porque puede traer un nombre. En la tabla sí se guarda, porque el cashflow lo necesita (CCSS).
+- Un tipo de movimiento o una moneda fuera de la lista se guarda nulo y abre `fila_sin_interpretar` con su celda. En la lectura real pasa una vez: una fila con Tipo Mov "Ordinario".
+- Los bancos de ajuste (CLIENTES, AFIP) y los históricos (VETA, cripto) quedan sin entidad.
+- El dueño de las tablas es `craftech_app`, así que no hace falta `GRANT`. A `mcp_reader` no se le dio nada.
+- La restricción de tipos de problema se redefinió por última vez en 0009 (el ticket decía 0011). La 0014 parte de esa versión.
+- La pestaña DERIVADA "Consolidado" es de «Budget por Area 2026 - Final». Queda afuera por el título y además por la clase.
+
+Medición sobre la lectura local de Consolidado (snapshot 1850, en una transacción revertida, sin escribir nada):
+- 21.534 movimientos, en unos 1,1 s (`duration_ms` 1112 y 1098 en dos corridas). Está muy por debajo de los 10 s, así que no hace falta interpretación incremental.
+- 15 problemas: 14 `cash_unmapped_rubro` y 1 `fila_sin_interpretar`. Ningún `cash_unknown_bank`.
+- Movimientos por entidad: 'Craftech S.A.' 11.183, 'Craftech-io Inc.' 9.796, ajuste 428, histórico 127.
+- Ninguna fila de Sueldos (por rubro o por tipo) guarda Detalle, Subdetalle o Equipo.
+
+Rubros sin regla en `config/cashflow_rows.yaml`, con su cantidad de filas, para que Ariel los lleve a Emi o Ro:
+
+| Rubro | Filas |
+|---|---|
+| 26. Distribución de dividendos | 10 |
+| 27. Pago Cta Pmo | 36 |
+| CAJA. Aportes | 4 |
+| CAJA. Crypto | 16 |
+| CAJA. Extracción Caja Chica | 137 |
+| CAJA. Mesh (fuera de la transferencia de Mercury a Mesh) | 168 |
+| CAJA. Pago préstamo | 26 |
+| CAJA. Transfencia Cuenta Propia | 641 |
+| CCSS (como rubro) | 37 |
+| CIRCUITO TECNOM | 240 |
+| CIRCUITO YELLAMO | 25 |
+| Egresos (como rubro) | 1 |
+| Ingresos financieros (como rubro) | 109 |
+| Mesh Cashback | 35 |
+
+«CAJA. Transfencia Cuenta Propia» no se trató como movimiento interno: no lo dice ninguna regla ratificada.
+
+Filas del Resumen sin regla (20), que quedan «sin regla» hasta que Emi o Ro las ratifiquen:
+- Argentina: Saldo Inicial, Subtotal ingresos, Saldo Final, Ventas en $, Gastos en $.
+- Saldo final en dólares: Saldo Final en USD.
+- Craftech Inc. en dólares: Saldo Inicial, Subtotal ingresos, Saldo Final.
+- Craftech Inc. con pagos proyectados: las 7 filas.
+- Diferencia entre proyectado y real: las 4 filas.
+
+Los saldos y subtotales son cuentas sobre otras filas, y quedan para T-019. Las filas proyectadas no salen de los movimientos.
+
+Para el pedido de cambios: el tiempo medido (unos 1,1 s para 21.534 movimientos) y las dos listas de arriba tienen que ir en la descripción. Hasta entonces los criterios 11 y 12 quedan sin tildar.
+
+## Test plan
+
+1. Gates: `uv run ruff check .`, `uv run ruff format --check`, `uv run pytest -q` con `TEST_DATABASE_URL` (337 pasan) y `uv build`. No hay herramienta de tipos en el repo.
+2. Mutaciones:
+   - sin el vaciado de Sueldos, el test de Sueldos falla;
+   - sin el chequeo `ONLY_IN`, falla `test_only_the_consolidado…`.
+3. `cd app && uv run pytest tests/test_consolidado.py` cubre:
+   - encabezados distintos: un problema y ningún movimiento tocado;
+   - mapa de bancos y banco desconocido;
+   - rubro sin regla;
+   - Sueldos con un nombre sintético buscado en `issue.details` y `system_event.details`;
+   - rechazo de la base por rubro y por tipo;
+   - las dos pestañas "Consolidado";
+   - una segunda lectura que reemplaza;
+   - el evento con `duration_ms` y las cantidades.
+4. Contra la base local, en una transacción revertida: `interpret.run` sobre la última lectura de Consolidado. Solo se imprimen cantidades y etiquetas.
+
+## Post-merge
+
+1. Aplicar la migración: `craftech-os migrate` (aplica `0014_cash_movement.sql`).
+2. Recargar las fuentes para que la pestaña Consolidado tome su esquema: `craftech-os sources load`.
+3. Pedir una lectura nueva de «Base informe Craftech » (o esperar la del worker), para que Consolidado se interprete y se llene `cash_movement`.
