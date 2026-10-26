@@ -72,3 +72,4 @@
 - [ ] [ui] /caja: el eje del gráfico muestra el mes sin el año sobre más de tres años de barras — QA T-021 r1 (F4)
 - [ ] [test] /caja: ningún test cubre una tabla con datos pero sin gráfico — QA T-021 r1 (F5)
 - [ ] [ui] /caja: la barra del mes en curso se ve igual que las de meses cerrados — QA T-021 r1 (F6, nit)
+- [ ] [ui] /caja: los id de las celdas llevan espacios — QA T-021 r1 (F7, nit)
