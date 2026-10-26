@@ -305,7 +305,7 @@ def test_cashflow_rows_hold_labels_only():
     )
     assert "01. Sueldos" in gastos["rubros"] and "04. Alquileres" in gastos["rubros"]
     sin_regla = [r for r in rules if not (r["rubros"] or r["agrupadores"] or r["banks"])]
-    assert {"Saldo Inicial", "Saldo Final en USD"} <= {r["label"] for r in sin_regla}
+    assert {"Ventas en $", "Saldo Final en USD"} <= {r["label"] for r in sin_regla}
 
 
 def test_cashflow_rows_reject_amounts(tmp_path):

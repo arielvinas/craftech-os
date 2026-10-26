@@ -11,6 +11,8 @@ TABLES = [
     "accrual",
     "annotation",
     "cash_movement",
+    "cashflow_row",
+    "cashflow_sheet_cell",
     "cell_change",
     "client",
     "client_alias",
@@ -49,6 +51,7 @@ MIGRATIONS = [
     "0012_cei_aws_parity.sql",
     "0013_fundings_collection_cut.sql",
     "0014_cash_movement.sql",
+    "0015_cashflow_cell.sql",
 ]
 
 
