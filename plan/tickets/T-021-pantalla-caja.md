@@ -1,7 +1,7 @@
 ---
 id: T-021
 title: Pantalla /caja con tabla, indicadores y gráfico (solo lectura)
-status: todo
+status: in-progress
 priority: high
 lane: ui
 depends_on: [T-019]
