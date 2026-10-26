@@ -65,10 +65,10 @@ Reescritos el 2026-10-26 según la sección Decisions: ninguna celda muestra un 
 - [x] La migración 0015 crea `cashflow_row`, `cashflow_sheet_cell`, la vista `cashflow_cell`, la vista de indicadores `cashflow_indicator` y las tres vistas MCP, con `COMMENT ON` en castellano en cada tabla, vista y columna (`test_db.py`, `test_mcp.py`).
 - [x] Una lectura sintética del Resumen proyecta `cashflow_sheet_cell` aunque la pestaña sea DERIVADA, y una segunda lectura la reemplaza entera (`test_the_resumen_is_projected_though_derivada_and_a_new_read_replaces_it`); las otras pestañas no se tocan (`test_other_tabs_are_not_projected`); `interpret` también la proyecta (`test_the_cli_interpret_projects_the_resumen_too`).
 - [x] Con movimientos y un Resumen sintéticos: un mes real con fila con regla sale `recalculada` con la suma de los movimientos, aunque la celda del Resumen sea tipeada y tenga otro valor (`test_real_months_add_the_movements_and_no_sheet_value_is_shown`); un mes proyectado y una fila sin regla salen sin valor, con origen `sin_regla` y su motivo (`test_projected_months_and_rows_without_a_rule_have_no_value_and_say_why`); «$ recibidos de la INC» y «USD enviados a la S.A.» de los dos bloques de Craftech Inc. salen `parametro`, sin valor, en los meses proyectados (`test_the_four_million_parameter_rows_are_marked_in_projected_months`).
-- [x] El mes en curso se recalcula y se distingue de los meses reales cerrados: periodo `en_curso` (`test_the_current_month_is_recalculated_and_marked`).
+- [x] El mes en curso se recalcula y se distingue de los meses reales cerrados: periodo `en_curso` (`test_the_current_month_is_recalculated_and_marked`). Los meses reales llegan hasta el último mes cerrado con movimientos; un mes cerrado sin movimientos queda proyectado y no entra en los indicadores (`test_a_closed_month_without_movements_is_not_real_yet`).
 - [x] Los indicadores (solo Craftech Inc., en dólares) dan el valor esperado sobre los datos sintéticos y cada uno trae su fórmula en texto y la marca de propuesto (`test_the_indicators_are_proposed_with_their_formula`).
 - [x] `mcp_reader` puede leer `mcp.caja_mensual`, `mcp.movimientos_de_caja` y `mcp.indicadores_de_caja`; `mcp_writer` no (`test_the_reader_reads_the_cash_views_and_the_writer_does_not`).
-- [x] Un test siembra un movimiento de «01. Sueldos» y verifica que ningún sueldo individual se filtra por `mcp.movimientos_de_caja` ni por `mcp.caja_mensual`: solo totales por fila y mes (`test_no_salary_of_a_person_reaches_the_cash_views`).
+- [x] Un test siembra un movimiento de «01. Sueldos» y verifica que ningún sueldo individual se filtra por `mcp.movimientos_de_caja` ni por `mcp.caja_mensual`: solo totales por fila y mes (`test_no_salary_of_a_person_reaches_the_cash_views`). En `mcp.movimientos_de_caja` los sueldos van como un total por mes, banco, moneda, tipo de movimiento, rubro y agrupador, sin celda ni tipo de cambio.
 - [x] Los tests usan solo datos sintéticos; los eventos llevan cantidades, nunca montos (`test_projection_events_carry_counts_only`).
 
 ## Out of scope
@@ -107,9 +107,18 @@ Reescritos el 2026-10-26 según la sección Decisions: ninguna celda muestra un 
   - Lo cierra T-020.
 - Las vistas MCP tardan 0,65 s (`caja_mensual`) y 1,5 s (`indicadores_de_caja`). `mcp_reader` lee las tres y `mcp_writer` recibe «permission denied».
 
+### Ronda 2 (hallazgos de QA ronda 1)
+
+- **Hallazgo 1, sueldos en `mcp.movimientos_de_caja`.** El runner resolvió la ambigüedad: valen el Contexto y el criterio 7. La vista da los movimientos que no son sueldos tal cual. Los de «01. Sueldos» o del tipo Sueldos van en una fila por mes, banco, moneda, tipo de movimiento, rubro y agrupador, con `monto` y `monto_usd` sumados y `tipo_cambio`, `celda`, detalle, subdetalle y equipo nulos. El test siembra dos sueldos en el mismo mes y banco y exige que se vea solo su total. Con la vista anterior falla.
+- **Hallazgo 2, mes real.** Es real hasta el último mes cerrado que tiene movimientos, es decir el mayor mes de `cash_movement` anterior al mes de hoy. Un mes cerrado sin movimientos queda `proyectado`: no tiene valor y lleva su motivo. Caja hoy toma ese último mes real, y salida mensual promedia los tres últimos meses reales (nula si hay menos de tres). El test nuevo saca los movimientos del último mes cerrado. Con la vista anterior falla.
+- **Hallazgo 3 (minor).** Va como split-out en `plan/improvements.md`.
+- **Hallazgo 4 (nit).** El comentario de `mcp.caja_mensual.unidad` aclara que el bloque «en miles de pesos» está en la misma escala que la planilla.
+- **Hallazgo 5 (nit).** Sin cambios: la guarda de tres meses ahora sí actúa cuando hay menos de tres meses reales.
+- Sin verificar en la ronda 2: la prueba de humo sobre una copia de la base de desarrollo. Solo corrieron los tests.
+
 ## Test plan
 
-- `uv run pytest -q`: 349 pasan (12 en `test_cashflow.py`, más los cambios de `test_db.py` y `test_consolidado.py`). Además pasan `ruff check`, `ruff format --check` y `uv build`.
+- `uv run pytest -q`: 350 pasan en la ronda 2 (13 en `test_cashflow.py`, más los cambios de `test_db.py` y `test_consolidado.py`). Además pasan `ruff check`, `ruff format --check` y `uv build`.
 - Mutaciones:
   - 7 muertas: saldo final sin el mes, signo ignorado, valor en meses proyectados, suma sin chequear la regla, primera aparición de la etiqueta, parámetro ignorado, salida sin USD enviados.
   - 1 que sobrevivía: el `CASE` de sueldos en la vista. Era redundante con el `CHECK` de la tabla y se sacó.
@@ -123,3 +132,9 @@ Reescritos el 2026-10-26 según la sección Decisions: ninguna celda muestra un 
   - las fórmulas de los indicadores;
   - las reglas de las filas sin regla (Ventas y Gastos en pesos, saldo en dólares, bloque con pagos proyectados, diferencias);
   - por qué el saldo de Argentina no coincide: faltan el saldo de apertura y las inversiones.
+
+Ronda 2, casos para QA:
+- `SELECT mes, banco, count(*), sum(monto) FROM mcp.movimientos_de_caja WHERE rubro = '01. Sueldos' GROUP BY 1, 2`: una fila por agrupador y moneda, nunca una por pago.
+- La suma de `monto` por mes y rubro en `mcp.movimientos_de_caja` coincide con la de `cash_movement`. Los totales de sueldos no pierden plata.
+- Si se borran los movimientos del último mes cerrado, ese mes pasa a `proyectado` y caja hoy toma el mes anterior.
+- Radio de impacto: solo la migración 0015, que todavía no está en main.
