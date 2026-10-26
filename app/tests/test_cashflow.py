@@ -312,6 +312,10 @@ def test_cashflow_rows_validate_their_arithmetic(tmp_path):
     path.write_text(yaml.safe_dump(bad))
     with pytest.raises(ValueError, match="eur"):
         cashflow.rows(path)
+    # A duplicate key would silently keep only the last rule.
+    path.write_text("blocks: [{name: x, resumen: X, unit: usd, rows: [{label: a, label: b}]}]")
+    with pytest.raises(ValueError, match="duplicated key 'label'"):
+        cashflow.rows(path)
 
 
 MCP_VIEWS = ("mcp.caja_mensual", "mcp.movimientos_de_caja", "mcp.indicadores_de_caja")

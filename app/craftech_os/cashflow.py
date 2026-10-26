@@ -10,9 +10,8 @@ import time
 from pathlib import Path
 
 import psycopg
-import yaml
 
-from craftech_os import events
+from craftech_os import events, yaml_unique
 from craftech_os.diff.compare import a1, normalize, value
 from craftech_os.interpret.cells import month, number
 from craftech_os.interpret.consolidado import ROWS_FILE, _texts
@@ -31,7 +30,7 @@ def _has_rule(row: dict) -> bool:
 
 def rows(path: Path = ROWS_FILE) -> list[dict]:
     """The rows of the cashflow, in order, with how each is computed; ValueError if malformed."""
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = yaml_unique.load(path.read_text(encoding="utf-8"))
     out = []
     for block_order, block in enumerate(data["blocks"]):
         name = block["name"]
