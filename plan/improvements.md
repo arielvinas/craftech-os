@@ -71,3 +71,11 @@
 - [ ] [docs-mcp] El glosario del servidor MCP no incluye la paridad del cashflow y dice que toda diferencia es un error de lectura — QA T-020 r1 (split-out)
 - [ ] [paridad] cashflow_cell (migración 0015) cruza cashflow_sheet_cell sin filtrar la pestaña: si quedaran celdas de otra pestaña (p. ej. el Resumen recreado con otro id), mcp.caja_mensual duplica celdas — CodeRabbit PR #20
 - [ ] [docs] El comentario de en_resumen en la migración 0016 lista como nulas valor_resumen, celda y lectura_id, pero planilla, pestaña y pestaña_id también lo son — QA T-020 r2 (nit)
+- [x] [ui] /caja en 375 px: la columna de conceptos ocupa 314 de 333 px y los meses casi no se ven — QA T-021 r1 (F1) — resuelto en PR #21 (CodeRabbit)
+- [x] [ui] /caja: el gráfico tiene ancho fijo y desplaza toda la página en horizontal en pantallas angostas — QA T-021 r1 (F2) — resuelto en PR #21 (CodeRabbit)
+- [ ] [ui] /caja: a la izquierda de la columna fija asoman restos del texto de los valores al desplazar — QA T-021 r1 (F3)
+- [x] [ui] /caja: el eje del gráfico muestra el mes sin el año sobre más de tres años de barras — QA T-021 r1 (F4) — resuelto en PR #21 (CodeRabbit)
+- [ ] [test] /caja: ningún test cubre una tabla con datos pero sin gráfico — QA T-021 r1 (F5)
+- [ ] [ui] /caja: la barra del mes en curso se ve igual que las de meses cerrados — QA T-021 r1 (F6, nit)
+- [ ] [ui] /caja: los id de las celdas llevan espacios — QA T-021 r1 (F7, nit)
+- [ ] [ui] /favicon.ico responde 404 en todas las pantallas (preexistente) — QA T-021 r1 (split-out)

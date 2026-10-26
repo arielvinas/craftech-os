@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Caja{% endblock %}
+{% set names = {
+  "caja_hoy": "Caja hoy",
+  "salida_mensual": "Salida mensual",
+  "cobertura": "Meses de cobertura",
+  "cierre_marzo": "Cierre de marzo",
+  "cierre_marzo_con_pagos_proyectados": "Cierre de marzo con pagos proyectados",
+} %}
+{% block content %}
+<h1>Caja</h1>
+{% if not blocks %}
+<p>Todavía no hay cashflow: falta una lectura del Resumen.</p>
+{% else %}
+<section id="indicadores">
+  <dl class="indicadores">
+    {% for i in indicators %}
+    <div>
+      <dt>{{ names.get(i.indicador, i.indicador) }}</dt>
+      <dd class="valor">{% if i.valor is none %}—{% elif i.unidad == "meses" %}{{ "%.1f" | format(i.valor) }} meses{% else %}{{ i.valor | money }} USD{% endif %}{% if i.mes %} <span class="muted">({{ i.mes.strftime("%Y-%m") }})</span>{% endif %}</dd>
+      <dd class="muted">{{ i.formula }}{% if i.propuesto %} <em>propuesto</em>{% endif %}</dd>
+    </div>
+    {% endfor %}
+  </dl>
+</section>
+<section id="tabla">
+  <p id="leyenda" class="muted">
+    <span class="periodo-en_curso">mes en curso</span>
+    <span class="periodo-proyectado">mes proyectado</span>
+    <span class="negativo">negativo</span>
+    <span class="sin-valor">sin valor: pasar el mouse para ver el motivo</span>
+  </p>
+  <div class="caja-scroll">
+    <table class="caja">
+      {% for name, block in blocks.items() %}
+      <tbody>
+        <tr>
+          <th class="concepto bloque">{{ name }} ({{ block.unit | upper }})</th>
+          {% for month, period in months %}<th class="periodo-{{ period }}">{{ month.strftime("%Y-%m") }}</th>{% endfor %}
+        </tr>
+        {% for row, by_month in block.rows.items() %}
+        <tr>
+          <th class="concepto">{{ row }}</th>
+          {% for month, period in months %}
+          {% set c = by_month.get(month) %}
+          {% if c %}
+          <td id="celda-{{ name }}-{{ row }}-{{ month.strftime('%Y-%m') }}" class="num periodo-{{ c.periodo }}{% if c.valor is none %} sin-valor{% elif c.valor < 0 %} negativo{% endif %}" title="origen: {{ c.origen }}{% if c.motivo %} — {{ c.motivo }}{% endif %} · {{ c.planilla }} / {{ c.pestaña }}!{{ c.celda }}">{{ c.valor | money }}</td>
+          {% else %}
+          <td class="num periodo-{{ period }}"></td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% endfor %}
+    </table>
+  </div>
+</section>
+{% if chart %}
+<section id="grafico">
+  <h2>Saldo Final de Craftech Inc. en dólares</h2>
+  <div class="caja-scroll">
+  <svg class="grafico" viewBox="0 -4 {{ chart.width }} {{ chart.height + 36 }}" width="{{ chart.width }}" height="{{ chart.height + 40 }}" role="img" aria-label="Saldo Final por mes">
+    {% for b in chart.bars %}
+    <rect class="barra{% if b.value < 0 %} negativa{% endif %}" x="{{ b.x + 3 }}" y="{{ '%.1f' | format(b.y) }}" width="18" height="{{ '%.1f' | format(b.height) }}"><title>{{ b.month.strftime("%Y-%m") }}: {{ b.value | money }}</title></rect>
+    <text class="etiqueta" x="{{ b.x + 12 }}" y="{{ chart.height + 16 }}">{{ b.month.strftime("%m") }}</text>
+    {% if loop.first or b.month.month == 1 %}<text class="etiqueta anio" x="{{ b.x + 12 }}" y="{{ chart.height + 28 }}">{{ b.month.year }}</text>{% endif %}
+    {% endfor %}
+    <line class="cero" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f' | format(chart.zero) }}" y2="{{ '%.1f' | format(chart.zero) }}"/>
+  </svg>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

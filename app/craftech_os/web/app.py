@@ -1,5 +1,5 @@
-"""The local web: read-only screens Cambios, Problemas, Fuentes, Facturas, Fundings and Clientes,
-and the "leer ahora" button.
+"""The local web: read-only screens Cambios, Problemas, Fuentes, Facturas, Fundings, Clientes and
+Caja, and the "leer ahora" button.
 
 No login in the v0, so the port is published on 127.0.0.1 only. Every page is rendered on the
 server; filters are GET forms validated against closed lists before reaching the database.
@@ -46,6 +46,8 @@ LEGAL_ENTITIES = ("Craftech S.A.", "Craftech-io Inc.")
 # The background color of each state in the spreadsheet (rule R29), for the swatch.
 STATE_COLORS = dict(zip(INVOICE_STATES, ("#ffffff", "#00ffff", "#4a86e8", "#ff9900", "#d9ead3",
                                          "#ff00ff"), strict=True))  # fmt: skip
+# The bar chart of /caja, in SVG units: drawn on the server, so the CSP stays as it is.
+CHART_HEIGHT, BAR_WIDTH = 160, 24
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 MAX_TEXT = 200
 
@@ -336,6 +338,55 @@ def clientes(request: Request):
         rows = queries.client_rows(conn)
         without = queries.rows_without_client(conn)
     return templates.TemplateResponse(request, "clientes.html", {"rows": rows, "without": without})
+
+
+def _chart(points: list[tuple[date, float]]) -> dict | None:
+    """Bars of (month, value), scaled to the tallest one, around a zero line."""
+    if not points:
+        return None
+    values = [v for _, v in points]
+    top, bottom = max(0, *values), min(0, *values)
+    span = (top - bottom) or 1
+    zero = CHART_HEIGHT * top / span
+    bars = []
+    for n, (month, value) in enumerate(points):
+        height = CHART_HEIGHT * abs(value) / span
+        bars.append(
+            {
+                "x": n * BAR_WIDTH,
+                "y": zero - height if value >= 0 else zero,
+                "height": height,
+                "month": month,
+                "value": value,
+            }
+        )
+    return {"width": len(bars) * BAR_WIDTH, "height": CHART_HEIGHT, "zero": zero, "bars": bars}
+
+
+@app.get("/caja", response_class=HTMLResponse)
+def caja(request: Request):
+    # No parameters in the first version: the whole Resumen.
+    with _connect() as conn:
+        cells = queries.cashflow_cells(conn)
+        indicators = queries.cashflow_indicators(conn)
+    periods, blocks = {}, {}
+    for c in cells:
+        periods[c["mes"]] = c["periodo"]
+        block = blocks.setdefault(c["bloque"], {"unit": c["unidad"], "rows": {}})
+        block["rows"].setdefault(c["fila"], {})[c["mes"]] = c
+    # The chart follows the indicators: Craftech Inc. in dollars.
+    balances = blocks.get("Craftech Inc. en dólares", {"rows": {}})["rows"].get("Saldo Final", {})
+    points = [(m, float(c["valor"])) for m, c in balances.items() if c["valor"] is not None]
+    return templates.TemplateResponse(
+        request,
+        "caja.html",
+        {
+            "months": sorted(periods.items()),
+            "blocks": blocks,
+            "indicators": indicators,
+            "chart": _chart(points),
+        },
+    )
 
 
 def _error_page(request: Request, status: int, message: str):
