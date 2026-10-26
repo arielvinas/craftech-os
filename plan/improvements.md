@@ -70,3 +70,4 @@
 - [ ] [tests] Tres mutaciones sobreviven en la migración 0016 de T-020: sin redondeo, sin la pestaña en el cruce y GRANT extra a mcp_writer; faltan fixtures con decimales y con dos pestañas — QA T-020 r1 (nit)
 - [ ] [docs-mcp] El glosario del servidor MCP no incluye la paridad del cashflow y dice que toda diferencia es un error de lectura — QA T-020 r1 (split-out)
 - [ ] [paridad] cashflow_cell (migración 0015) cruza cashflow_sheet_cell sin filtrar la pestaña: si quedaran celdas de otra pestaña (p. ej. el Resumen recreado con otro id), mcp.caja_mensual duplica celdas — CodeRabbit PR #20
+- [ ] [docs] El comentario de en_resumen en la migración 0016 lista como nulas valor_resumen, celda y lectura_id, pero planilla, pestaña y pestaña_id también lo son — QA T-020 r2 (nit)
