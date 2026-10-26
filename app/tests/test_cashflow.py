@@ -411,6 +411,16 @@ def test_the_parity_compares_recalculated_cells_with_the_resumen(db, env, fake):
         (INC, pagos, CUR),
     ).fetchone()
     assert (celda, periodo, tolerancia) == ("F3", "en_curso", 1)
+    # A configured row that is not in the Resumen is compared against 0 and marked.
+    (valor_resumen, diferencia, en_resumen) = db.execute(
+        "SELECT valor_resumen, diferencia, en_resumen FROM mcp.paridad_cashflow"
+        " WHERE bloque = %s AND fila = 'Saldo Final' AND mes = %s",
+        (INC, R1),
+    ).fetchone()
+    assert (valor_resumen, diferencia, en_resumen) == (None, -400, False)
+    assert db.execute(
+        "SELECT bool_and(en_resumen) FROM mcp.paridad_cashflow WHERE fila = %s", (pagos,)
+    ).fetchone() == (True,)
 
 
 def test_only_recalculated_cells_are_compared_and_the_rest_are_counted(db, env, fake):
@@ -420,7 +430,7 @@ def test_only_recalculated_cells_are_compared_and_the_rest_are_counted(db, env, 
     # Projected months (sin_regla and parametro) and rows without a rule are not compared.
     assert NEXT not in {k[2] for k in parity}
     assert not {k for k in parity if k[1] == "Pagos Proyectados Craftech"}
-    assert set(parity) <= {
+    assert set(parity) == {
         (b, f, m)
         for b, f, m in db.execute(
             "SELECT bloque, fila, mes FROM mcp.caja_mensual WHERE origen = 'recalculada'"

@@ -15,7 +15,7 @@ branch: arielvinas/t-020-paridad-cashflow
 Tercer ticket de la caja (`plan/adr/ADR-003-caja-desde-movimientos.md`, aprobado por Ariel el 25-oct-2026). Compara lo que recalculamos desde los movimientos con lo que dice el Resumen de Finanzas, celda por celda, para ver dónde no coinciden.
 
 Decisiones del documento de arquitectura (ADR-003):
-- Solo se comparan las celdas `recalculada` contra la misma fila y mes del Resumen, en la unidad de la fila. De las `importada` solo se informa cuántas hay (compararlas consigo mismas no dice nada).
+- Solo se comparan las celdas `recalculada` contra la misma fila y mes del Resumen, en la unidad de la fila. De las `sin_regla` y `parametro` solo se informa cuántas hay por mes (no tienen valor). (El ADR decía `importada`; ese origen ya no existe, ver Decisions.)
 - Las diferencias se muestran, no se corrigen.
 - La tolerancia propuesta es una unidad de la fila (mil pesos o un dólar). No está ratificada: es pregunta abierta para Emi y Ro.
 
@@ -60,6 +60,7 @@ Ajustados el 2026-10-26 según la sección Decisions: el origen `importada` pas�
 - `app/migrations/0016_paridad_cashflow.sql`:
   - `mcp.paridad_cashflow`: cada celda `recalculada` de `mcp.caja_mensual` junto a la celda de la misma fila y mes en `cashflow_sheet_cell`. Columnas: bloque, fila, mes, periodo, `valor_recalculado`, `valor_resumen`, `diferencia`, unidad, `tolerancia`, `fuera_de_tolerancia`, planilla, pestaña, celda y lectura.
   - `diferencia` = Resumen − recalculado, redondeada al centavo, igual que `mcp.paridad_fundings_aws`. Una celda vacía del Resumen cuenta como 0.
+  - Una fila de la configuración que no está en el Resumen aparece igual (cruce `LEFT JOIN`), con `en_resumen` falso y el Resumen contado como 0, para que `mcp.cobertura_cashflow` y la paridad cuenten las mismas celdas (hallazgo F1 de QA y CodeRabbit en el PR #20).
   - `tolerancia`: 1.000 en las filas en pesos y 1 en las filas en dólares. Los valores en pesos están en la misma escala que la planilla, así que «mil pesos» es 1.000. `fuera_de_tolerancia` = |diferencia| > tolerancia. El `COMMENT ON` dice que es propuesta y que la ratifican Emi y Ro.
   - El mes en curso también se compara (es `recalculada`). Se distingue con `periodo` = `en_curso`, porque es esperable que no coincida.
   - `mcp.cobertura_cashflow` (vista hermana): por mes y periodo, cuántas celdas `recalculadas`, `sin_regla` y `parametro` hay.

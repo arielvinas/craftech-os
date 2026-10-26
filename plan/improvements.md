@@ -66,6 +66,6 @@
 - [ ] [privacy] mcp.movimientos_de_caja: 123/435 filas de sueldos agregadas salen de un solo pago (comisión/bono), el total equivale al monto de una persona — decidir si alcanza — QA T-019 r2 (minor 1)
 - [ ] [test-gap] salida mensual 'últimos tres meses reales' sin test que la distinga de la ventana por calendario — QA T-019 r2 (minor 2)
 - [ ] [test-gap] sueldos reconocidos solo por tipo de movimiento Sueldos (otro rubro) sin test en mcp.movimientos_de_caja — QA T-019 r2 (minor 3)
-- [ ] [paridad] Una fila de la configuración ausente del Resumen queda fuera de mcp.paridad_cashflow sin aviso, pero mcp.cobertura_cashflow la cuenta como comparada (hoy 0 filas así) — QA T-020 r1 (minor)
+- [x] [paridad] Una fila de la configuración ausente del Resumen queda fuera de mcp.paridad_cashflow sin aviso, pero mcp.cobertura_cashflow la cuenta como comparada (hoy 0 filas así) — QA T-020 r1 (minor)
 - [ ] [tests] Tres mutaciones sobreviven en la migración 0016 de T-020: sin redondeo, sin la pestaña en el cruce y GRANT extra a mcp_writer; faltan fixtures con decimales y con dos pestañas — QA T-020 r1 (nit)
 - [ ] [docs-mcp] El glosario del servidor MCP no incluye la paridad del cashflow y dice que toda diferencia es un error de lectura — QA T-020 r1 (split-out)
