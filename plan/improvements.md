@@ -70,3 +70,4 @@
 - [ ] [ui] /caja: el gráfico tiene ancho fijo y desplaza toda la página en horizontal en pantallas angostas — QA T-021 r1 (F2)
 - [ ] [ui] /caja: a la izquierda de la columna fija asoman restos del texto de los valores al desplazar — QA T-021 r1 (F3)
 - [ ] [ui] /caja: el eje del gráfico muestra el mes sin el año sobre más de tres años de barras — QA T-021 r1 (F4)
+- [ ] [test] /caja: ningún test cubre una tabla con datos pero sin gráfico — QA T-021 r1 (F5)
