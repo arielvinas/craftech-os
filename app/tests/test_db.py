@@ -52,6 +52,7 @@ MIGRATIONS = [
     "0013_fundings_collection_cut.sql",
     "0014_cash_movement.sql",
     "0015_cashflow_cell.sql",
+    "0016_paridad_cashflow.sql",
 ]
 
 
