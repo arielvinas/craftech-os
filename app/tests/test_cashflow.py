@@ -376,7 +376,7 @@ def test_no_salary_of_a_person_reaches_the_cash_views(db, env, fake):
 PARITY_ROWS = [
     [None, None, *(_header(m) for m in MONTHS)],
     ["ARGENTINA", "Pagos Recibidos S.A.", "1500", "2999", "0", "0", "0"],
-    ["CASH FLOW USA", "Pagos Recibidos INC", "1000", "499", "5", None, "0"],
+    ["CASH FLOW USA", "Pagos Recibidos INC", "1000", "498.996", "5", None, "0"],
     ["CONTROL CASH FLOW REAL CON PROYECTADO"],
     ["Pagos Proyectados Craftech", None, *["0"] * 5],
 ]
@@ -397,7 +397,8 @@ def test_the_parity_compares_recalculated_cells_with_the_resumen(db, env, fake):
     parity = _parity(db)
     pagos = "Pagos Recibidos INC"
     assert parity[INC, pagos, R1] == (Decimal("1000"), 1000, 0, "usd", False)
-    assert parity[INC, pagos, R2] == (Decimal("500"), 499, -1, "usd", False)
+    # -1.004 rounds to -1.00 before the tolerance: within.
+    assert parity[INC, pagos, R2] == (Decimal("500"), Decimal("498.996"), -1, "usd", False)
     assert parity[INC, pagos, R3] == (Decimal("0"), 5, 5, "usd", True)
     # An empty cell of the Resumen counts as 0; the current month is compared and marked.
     assert parity[INC, pagos, CUR] == (Decimal("10"), None, -10, "usd", True)
