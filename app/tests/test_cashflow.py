@@ -316,6 +316,12 @@ def test_cashflow_rows_validate_their_arithmetic(tmp_path):
     path.write_text("blocks: [{name: x, resumen: X, unit: usd, rows: [{label: a, label: b}]}]")
     with pytest.raises(ValueError, match="duplicated key 'label'"):
         cashflow.rows(path)
+    # A key that overrides a merged one is not a duplicate.
+    path.write_text(
+        "base: &base {label: a, rubros: [r]}\n"
+        "blocks: [{name: x, resumen: X, unit: usd, rows: [{<<: *base, label: b}]}]"
+    )
+    assert [r["label"] for r in cashflow.rows(path)] == ["b"]
 
 
 MCP_VIEWS = ("mcp.caja_mensual", "mcp.movimientos_de_caja", "mcp.indicadores_de_caja")
