@@ -60,3 +60,4 @@
 - [ ] [docs] Comentarios de la migración 0014 y de config/cashflow_rows.yaml dicen que se revisa el agrupador, pero el código solo mira el rubro — QA T-018 r1 (F2)
 - [ ] [datos] La transferencia Mercury→Mesh solo se reconoce si el texto es exactamente «MERCURY» — QA T-018 r1 (F3)
 - [ ] [datos] value() devuelve el JSON crudo de effectiveValue ({"stringValue": ""}) para celdas vacías explícitas; afecta a todos los intérpretes — QA T-018 r1 (F4)
+- [ ] [decision-pending] T-020 asume celdas 'importada' (informa su cantidad); ADR-003 ahora dice que no hay importadas: origen recalculada, sin_regla o parametro, y la paridad compara recalculada contra cashflow_sheet_cell — T-019
