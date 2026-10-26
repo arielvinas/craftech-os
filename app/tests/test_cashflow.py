@@ -370,3 +370,103 @@ def test_no_salary_of_a_person_reaches_the_cash_views(db, env, fake):
         (R1,),
     ).fetchone()
     assert celda is None
+
+
+# The Resumen of the parity tests: equal, within and beyond one unit of the row.
+PARITY_ROWS = [
+    [None, None, *(_header(m) for m in MONTHS)],
+    ["ARGENTINA", "Pagos Recibidos S.A.", "1500", "2999", "0", "0", "0"],
+    ["CASH FLOW USA", "Pagos Recibidos INC", "1000", "498.996", "5", None, "0"],
+    ["CONTROL CASH FLOW REAL CON PROYECTADO"],
+    ["Pagos Proyectados Craftech", None, *["0"] * 5],
+]
+
+
+def _parity(db):
+    """{(block, label, month): (recalculated, resumen, difference, unit, beyond)}."""
+    rows = db.execute(
+        "SELECT bloque, fila, mes, valor_recalculado, valor_resumen, diferencia, unidad,"
+        " fuera_de_tolerancia FROM mcp.paridad_cashflow"
+    ).fetchall()
+    return {tuple(r[:3]): tuple(r[3:]) for r in rows}
+
+
+def test_the_parity_compares_recalculated_cells_with_the_resumen(db, env, fake):
+    _set(fake, 61, PARITY_ROWS, "file-c")
+    _import(env)
+    parity = _parity(db)
+    pagos = "Pagos Recibidos INC"
+    assert parity[INC, pagos, R1] == (Decimal("1000"), 1000, 0, "usd", False)
+    # -1.004 rounds to -1.00 before the tolerance: within.
+    assert parity[INC, pagos, R2] == (Decimal("500"), Decimal("498.996"), -1, "usd", False)
+    assert parity[INC, pagos, R3] == (Decimal("0"), 5, 5, "usd", True)
+    # An empty cell of the Resumen counts as 0; the current month is compared and marked.
+    assert parity[INC, pagos, CUR] == (Decimal("10"), None, -10, "usd", True)
+    # Argentina is in pesos: one unit of the row is a thousand.
+    sa = "Pagos Recibidos S.A."
+    assert parity[ARG, sa, R2] == (Decimal("2000"), 2999, 999, "ars", False)
+    assert parity[ARG, sa, R1] == (Decimal("0"), 1500, 1500, "ars", True)
+    (celda, periodo, tolerancia) = db.execute(
+        "SELECT celda, periodo, tolerancia FROM mcp.paridad_cashflow"
+        " WHERE bloque = %s AND fila = %s AND mes = %s",
+        (INC, pagos, CUR),
+    ).fetchone()
+    assert (celda, periodo, tolerancia) == ("F3", "en_curso", 1)
+    # A configured row that is not in the Resumen is compared against 0 and marked.
+    (valor_resumen, diferencia, en_resumen) = db.execute(
+        "SELECT valor_resumen, diferencia, en_resumen FROM mcp.paridad_cashflow"
+        " WHERE bloque = %s AND fila = 'Saldo Final' AND mes = %s",
+        (INC, R1),
+    ).fetchone()
+    assert (valor_resumen, diferencia, en_resumen) == (None, -400, False)
+    assert db.execute(
+        "SELECT bool_and(en_resumen) FROM mcp.paridad_cashflow WHERE fila = %s", (pagos,)
+    ).fetchone() == (True,)
+
+
+def test_only_recalculated_cells_are_compared_and_the_rest_are_counted(db, env, fake):
+    _set(fake, 61, PARITY_ROWS, "file-c")
+    _import(env)
+    parity = _parity(db)
+    # Projected months (sin_regla and parametro) and rows without a rule are not compared.
+    assert NEXT not in {k[2] for k in parity}
+    assert not {k for k in parity if k[1] == "Pagos Proyectados Craftech"}
+    assert set(parity) == {
+        (b, f, m)
+        for b, f, m in db.execute(
+            "SELECT bloque, fila, mes FROM mcp.caja_mensual WHERE origen = 'recalculada'"
+        )
+    }
+    by = {
+        r[0]: r[1:]
+        for r in db.execute(
+            "SELECT mes, periodo, recalculadas, sin_regla, parametro FROM mcp.cobertura_cashflow"
+        )
+    }
+    assert set(by) == set(MONTHS)
+    assert by[NEXT][0] == "proyectado" and by[NEXT][1] == 0 and by[NEXT][3] == 3
+    assert by[R1][0] == "real" and by[R1][1] > 0 and by[R1][2] > 0 and by[R1][3] == 0
+    origins = dict(db.execute("SELECT origen, count(*) FROM mcp.caja_mensual GROUP BY origen"))
+    totals = [sum(r[i] for r in by.values()) for i in (1, 2, 3)]
+    assert totals == [origins[o] for o in ("recalculada", "sin_regla", "parametro")]
+
+
+def test_the_reader_reads_the_parity_views_and_the_writer_does_not(db, env, fake):
+    _import(env)
+    reader, writer = (
+        _url("mcp_reader", "MCP_READER_PASSWORD"),
+        _url("mcp_writer", "MCP_WRITER_PASSWORD"),
+    )
+    views = ("mcp.paridad_cashflow", "mcp.cobertura_cashflow")
+    with psycopg.connect(reader, autocommit=True) as conn:
+        for view in views:
+            assert conn.execute(f"SELECT count(*) FROM {view}").fetchone()[0] > 0, view
+    with psycopg.connect(writer, autocommit=True) as conn:
+        for view in views:
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                conn.execute(f"SELECT * FROM {view}")
+    comment = db.execute(
+        "SELECT obj_description('mcp.paridad_cashflow'::regclass)"
+        " || col_description('mcp.paridad_cashflow'::regclass, 11)"
+    ).fetchone()[0]
+    assert "propuesta" in comment and "Emi y Ro" in comment
