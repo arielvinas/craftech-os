@@ -425,3 +425,16 @@ def source_reads(conn: psycopg.Connection) -> list[dict]:
             "SELECT planilla, leido_en, lectura_pedida_en, ultimo_error_en, ultimo_error"
             " FROM mcp.sources ORDER BY planilla"
         ).fetchall()
+
+
+def cashflow_cells(conn: psycopg.Connection) -> list[dict]:
+    """Every cell of the monthly cashflow, in the order of the Resumen."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT * FROM mcp.caja_mensual ORDER BY orden_bloque, orden_fila, mes"
+        ).fetchall()
+
+
+def cashflow_indicators(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute("SELECT * FROM mcp.indicadores_de_caja ORDER BY orden").fetchall()

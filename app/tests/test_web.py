@@ -656,3 +656,194 @@ def test_inicio_is_read_only_and_logs_no_names_or_amounts(db, client, caplog):
         assert control not in html
     for secret in ("Planilla Ficticia", "cliente", "2000", "1100", "Error Ficticio"):
         assert secret not in caplog.text
+
+
+def _shift(months: int) -> date:
+    n = date.today().year * 12 + date.today().month - 1 + months
+    return date(n // 12, n % 12 + 1, 1)
+
+
+# Three closed real months, the current one and a projected one.
+R1, R2, R3, CUR, NEXT = (_shift(n) for n in (-3, -2, -1, 0, 1))
+INC = "Craftech Inc. en dólares"
+SHEET_VALUE = 98765  # what the Resumen says: never shown
+
+
+def _seed_caja(db):
+    """A Resumen of five months with two blocks, and the Mesh and Galicia movements behind it.
+    Mesh ends R1 at -200 (100 in, 300 out), then gets 1000 in R2 and spends 100 in R3."""
+    source = db.execute(
+        "INSERT INTO source (title, drive_id) VALUES ('Planilla Ficticia C', 'file-c') RETURNING id"
+    ).fetchone()[0]
+    tab = db.execute(
+        "INSERT INTO source_tab (source_id, sheet_id, name, class)"
+        " VALUES (%s, 3, 'Resumen Ficticio', 'DERIVADA') RETURNING id",
+        (source,),
+    ).fetchone()[0]
+    snap = db.execute(
+        "INSERT INTO snapshot (source_tab_id, drive_version, drive_modified_at, duration_ms,"
+        " origin, content_hash, content, row_count, col_count, cell_count)"
+        " VALUES (%s, 1, now(), 120, 'lectura', %s, '{}', 1, 1, 1) RETURNING id",
+        (tab, f"{3:064x}"),
+    ).fetchone()[0]
+    rows = [
+        # block, block_order, label, row_order, unit, rubros, banks, balance, sign, parametro
+        (INC, 0, "Saldo Inicial", 0, "usd", [], ["Mesh"], "inicial", 1, None),
+        (INC, 0, "Pagos Recibidos INC", 1, "usd", ["COBRANZA"], [], None, 1, None),
+        (INC, 0, "Gastos", 2, "usd", ["04. Alquileres"], [], None, -1, None),
+        (INC, 0, "USD enviados a la S.A.", 3, "usd", ["CAJA. Intercompany"], [], None, -1,
+         "USD a enviar para cerrar el mes con 4.000.000 de pesos"),
+        (INC, 0, "Fila Ficticia Sin Regla", 4, "usd", [], [], None, 1, None),
+        (INC, 0, "Saldo Final", 5, "usd", [], ["Mesh"], "final", 1, None),
+        ("Argentina en miles de pesos", 1, "Saldo Final", 0, "ars", [], ["GALICIA"], "final", 1,
+         None),
+    ]  # fmt: skip
+    for block, b_order, label, r_order, unit, rubros, banks, balance, sign, parametro in rows:
+        db.execute(
+            "INSERT INTO cashflow_row (block, block_order, label, row_order, unit, rubros, banks,"
+            " balance, sign, parametro) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (block, b_order, label, r_order, unit, rubros, banks, balance, sign, parametro),
+        )
+        for n, month in enumerate((R1, R2, R3, CUR, NEXT)):
+            db.execute(
+                "INSERT INTO cashflow_sheet_cell (source_tab_id, snapshot_id, block, label, month,"
+                " value, cell_ref, has_formula) VALUES (%s, %s, %s, %s, %s, %s, %s, false)",
+                (tab, snap, block, label, month, SHEET_VALUE, f"{'CDEFG'[n]}{r_order + 4}"),
+            )
+    moves = [
+        ("Mesh", "USD", "COBRANZA", 100, R1),
+        ("Mesh", "USD", "04. Alquileres", -300, R1),
+        ("Mesh", "USD", "COBRANZA", 1000, R2),
+        ("Mesh", "USD", "04. Alquileres", -100, R3),
+        ("Mesh", "USD", "COBRANZA", 7, CUR),
+        ("GALICIA", "ARS", "COBRANZA", 5000, R2),
+    ]
+    for n, (bank, currency, rubro, amount, month) in enumerate(moves):
+        db.execute(
+            "INSERT INTO cash_movement (source_tab_id, snapshot_id, rules_version, row_key,"
+            " cell_ref, month, bank, historical, adjustment, currency, amount, rubro)"
+            " VALUES (%s, %s, 'v1', %s, %s, %s, %s, false, false, %s, %s, %s)",
+            (tab, snap, f"fila-{n}", f"K{n + 2}", month, bank, currency, amount, rubro),
+        )
+
+
+def _cell(html: str, row: str, month: date) -> str:
+    """The <td> of a row and month of the cashflow table."""
+    found = re.search(rf'<td id="celda-{re.escape(row)}-{month:%Y-%m}"[^>]*>[^<]*</td>', html)
+    assert found, (row, month)
+    return found.group(0)
+
+
+def test_caja_answers_200_and_is_in_the_menu(db, client):
+    _seed_caja(db)
+    response = client.get("/caja")
+    assert response.status_code == 200
+    assert response.headers["content-security-policy"] == "default-src 'self'"
+    assert '<a href="/caja">Caja</a>' in client.get("/cambios").text
+
+
+def test_caja_shows_the_five_indicators_with_their_formula_as_proposed(db, client):
+    _seed_caja(db)
+    html = client.get("/caja").text
+    indicators = html[html.index('id="indicadores"') : html.index('id="tabla"')]
+    for name in ("Caja hoy", "Salida mensual", "Meses de cobertura", "Cierre de marzo",
+                 "Cierre de marzo con pagos proyectados"):  # fmt: skip
+        assert f"<dt>{name}</dt>" in indicators, name
+    assert indicators.count("propuesto") == 5
+    assert "Saldo Final de «Craftech Inc. en dólares» del último mes real cerrado" in indicators
+    assert "Caja hoy ÷ salida mensual." in indicators
+    assert "700.00" in indicators  # caja hoy: the Saldo Final of R3
+
+
+def test_caja_table_shows_blocks_rows_and_months_with_a_sticky_concept_column(db, client):
+    _seed_caja(db)
+    html = client.get("/caja").text
+    table = html[html.index('id="tabla"') :]
+    assert '<div class="caja-scroll">' in table
+    assert table.index(INC) < table.index("Argentina en miles de pesos")
+    for row in ("Saldo Inicial", "Pagos Recibidos INC", "Gastos", "Fila Ficticia Sin Regla"):
+        assert f'<th class="concepto">{row}</th>' in table, row
+    for month in (R1, R2, R3, CUR, NEXT):
+        assert f"{month:%Y-%m}" in table
+    assert "1,000.00" in _cell(html, f"{INC}-Pagos Recibidos INC", R2)
+    assert "5,000.00" in _cell(html, "Argentina en miles de pesos-Saldo Final", R2)
+    css = client.get("/static/style.css").text
+    assert re.search(r"\.concepto \{[^}]*position: sticky", css)
+    assert re.search(r"table\.caja \.concepto \{[^}]*white-space: normal; [^}]*max-width", css)
+    assert re.search(r"\.caja-scroll \{[^}]*overflow-x: auto", css)
+
+
+def test_caja_cells_carry_their_period_sign_and_origin(db, client):
+    _seed_caja(db)
+    html = client.get("/caja").text
+    real = _cell(html, f"{INC}-Saldo Final", R3)
+    assert "periodo-real" in real and "negativo" not in real and "700.00" in real
+    assert "origen: recalculada" in real and "Planilla Ficticia C / Resumen Ficticio!E9" in real
+    assert "negativo" in _cell(html, f"{INC}-Saldo Final", R1)  # -200
+    assert "periodo-en_curso" in _cell(html, f"{INC}-Saldo Final", CUR)
+    projected = _cell(html, f"{INC}-Saldo Final", NEXT)
+    assert "periodo-proyectado" in projected and "sin-valor" in projected
+    assert "origen: sin_regla" in projected and "mes proyectado" in projected
+    no_rule = _cell(html, f"{INC}-Fila Ficticia Sin Regla", R2)
+    assert "sin-valor" in no_rule and "fila sin regla ratificada" in no_rule
+    assert "origen: parametro" in _cell(html, f"{INC}-USD enviados a la S.A.", NEXT)
+    legend = html[html.index('id="leyenda"') :]
+    for mark in ("periodo-en_curso", "periodo-proyectado", "negativo", "sin-valor"):
+        assert f'class="{mark}"' in legend, mark
+    assert "98765" not in html and "98,765" not in html  # the Resumen's values
+
+
+def test_caja_chart_is_server_side_svg_without_scripts(db, client):
+    _seed_caja(db)
+    response = client.get("/caja")
+    html = response.text
+    chart = html[html.index("<svg") : html.index("</svg>")]
+    # Saldo Final of Craftech Inc.: R1, R2, R3 and the current month; NEXT has no value.
+    assert chart.count('<rect class="barra') == 4
+    assert chart.count('class="barra negativa"') == 1
+    assert f"{NEXT:%Y-%m}" not in chart
+    # From -200 to 800 in 160 units: zero at 128; bars grow up from it, or down for negatives.
+    assert 'y1="128.0"' in chart
+    assert 'class="barra negativa" x="3" y="128.0" width="18" height="32.0"' in chart
+    assert 'y="0.0" width="18" height="128.0"' in chart  # R2, 800
+    # The year under the first bar and under every January; it scrolls on its own.
+    years = re.findall(r'<text class="etiqueta anio" x="(\d+)"[^>]*>(\d{4})</text>', chart)
+    expected = [(str(n * 24 + 12), str(m.year)) for n, m in enumerate((R1, R2, R3, CUR))
+                if n == 0 or m.month == 1]  # fmt: skip
+    assert years == expected
+    assert html[: html.index("<svg")].endswith('<div class="caja-scroll">\n  ')
+    assert "<script" not in html.lower() and "style=" not in html
+    assert (
+        response.headers["content-security-policy"]
+        == client.get("/cambios").headers["content-security-policy"]
+    )
+
+
+def test_caja_chart_labels_the_year_under_the_first_bar_and_every_january(client, monkeypatch):
+    months = (date(2025, 11, 1), date(2025, 12, 1), date(2026, 1, 1), date(2026, 2, 1))
+    cells = [
+        {"mes": m, "periodo": "real", "bloque": INC, "unidad": "usd", "fila": "Saldo Final",
+         "valor": 100, "origen": "recalculada", "motivo": None, "planilla": "P", "pestaña": "R",
+         "celda": "C1"}
+        for m in months
+    ]  # fmt: skip
+    monkeypatch.setattr(web.queries, "cashflow_cells", lambda conn: cells)
+    monkeypatch.setattr(web.queries, "cashflow_indicators", lambda conn: [])
+    chart = client.get("/caja").text.split("<svg")[1]
+    years = re.findall(r'<text class="etiqueta anio" x="(\d+)"[^>]*>(\d{4})</text>', chart)
+    assert years == [("12", "2025"), ("60", "2026")]
+
+
+def test_caja_without_a_resumen_says_so(db, client):
+    html = client.get("/caja").text
+    assert "Todavía no hay cashflow" in html and "<svg" not in html
+
+
+def test_caja_is_read_only_and_logs_no_names_or_amounts(db, client, caplog):
+    _seed_caja(db)
+    with caplog.at_level(logging.DEBUG):
+        html = client.get("/caja").text
+    for control in ("<form", "<input", "<button", "<textarea", "<select"):
+        assert control not in html
+    for secret in ("Planilla Ficticia", "Saldo", "1000", "700"):
+        assert secret not in caplog.text
