@@ -819,6 +819,21 @@ def test_caja_chart_is_server_side_svg_without_scripts(db, client):
     )
 
 
+def test_caja_chart_labels_the_year_under_the_first_bar_and_every_january(client, monkeypatch):
+    months = (date(2025, 11, 1), date(2025, 12, 1), date(2026, 1, 1), date(2026, 2, 1))
+    cells = [
+        {"mes": m, "periodo": "real", "bloque": INC, "unidad": "usd", "fila": "Saldo Final",
+         "valor": 100, "origen": "recalculada", "motivo": None, "planilla": "P", "pestaña": "R",
+         "celda": "C1"}
+        for m in months
+    ]  # fmt: skip
+    monkeypatch.setattr(web.queries, "cashflow_cells", lambda conn: cells)
+    monkeypatch.setattr(web.queries, "cashflow_indicators", lambda conn: [])
+    chart = client.get("/caja").text.split("<svg")[1]
+    years = re.findall(r'<text class="etiqueta anio" x="(\d+)"[^>]*>(\d{4})</text>', chart)
+    assert years == [("12", "2025"), ("60", "2026")]
+
+
 def test_caja_without_a_resumen_says_so(db, client):
     html = client.get("/caja").text
     assert "Todavía no hay cashflow" in html and "<svg" not in html
