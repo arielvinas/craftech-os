@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: Cashflow mensual con el origen de cada celda y vistas MCP
-status: todo
+status: in-progress
 priority: high
 lane: core
 depends_on: [T-018]
