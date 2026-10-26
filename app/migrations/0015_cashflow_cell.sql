@@ -61,12 +61,14 @@ COMMENT ON COLUMN cashflow_sheet_cell.value IS 'Valor tal como está en la celda
 COMMENT ON COLUMN cashflow_sheet_cell.cell_ref IS 'Celda en notación A1.';
 COMMENT ON COLUMN cashflow_sheet_cell.has_formula IS 'Verdadero si la celda tiene fórmula; falso si el valor está escrito a mano.';
 
--- One cell per row of the cashflow and month of the Resumen. Real months are before the
--- current one; the current one is computed with what there is; projected months have no
--- ratified rule yet, so no value.
+-- One cell per row of the cashflow and month of the Resumen. Real months go up to the last
+-- closed month with movements; the current one is computed with what there is; the rest are
+-- projected, with no ratified rule yet, so no value.
 CREATE VIEW cashflow_cell AS
 WITH months AS (
     SELECT DISTINCT month FROM cashflow_sheet_cell
+), last_real AS (
+    SELECT max(month) AS month FROM cash_movement WHERE month < date_trunc('month', current_date)
 ), moves AS (
     SELECT bank, currency, rubro, agrupador, month, sum(amount) AS amount
     FROM cash_movement
@@ -92,10 +94,10 @@ WITH months AS (
                SELECT sum(a.computed) FROM base a
                WHERE a.block = b.block AND a.month = b.month AND a.label = ANY (b.adds))
            END AS value,
-           CASE WHEN b.month < date_trunc('month', current_date) THEN 'real'
+           CASE WHEN b.month <= l.month THEN 'real'
                 WHEN b.month = date_trunc('month', current_date) THEN 'en_curso'
                 ELSE 'proyectado' END AS period
-    FROM base b
+    FROM base b, last_real l
 )
 SELECT c.block, c.block_order, c.label, c.row_order, c.month, c.period,
        CASE WHEN c.period <> 'proyectado' THEN c.value END AS value,
@@ -118,7 +120,7 @@ COMMENT ON COLUMN cashflow_cell.block_order IS 'Orden del bloque, desde 0.';
 COMMENT ON COLUMN cashflow_cell.label IS 'Fila del cashflow.';
 COMMENT ON COLUMN cashflow_cell.row_order IS 'Orden de la fila dentro del bloque, desde 0.';
 COMMENT ON COLUMN cashflow_cell.month IS 'Mes, el primer día del mes.';
-COMMENT ON COLUMN cashflow_cell.period IS 'real (antes del mes en curso), en_curso (el mes de hoy, calculado con los movimientos que hay) o proyectado (después).';
+COMMENT ON COLUMN cashflow_cell.period IS 'real (hasta el último mes cerrado con movimientos), en_curso (el mes de hoy, calculado con los movimientos que hay) o proyectado (el resto, incluido un mes cerrado que todavía no tiene movimientos).';
 COMMENT ON COLUMN cashflow_cell.value IS 'Valor calculado desde los movimientos, en la unidad del bloque; nulo si la fila no tiene regla ratificada o el mes es proyectado.';
 COMMENT ON COLUMN cashflow_cell.unit IS 'ars o usd.';
 COMMENT ON COLUMN cashflow_cell.origin IS 'recalculada (sale de los movimientos), sin_regla (sin valor: fila sin regla ratificada o mes proyectado) o parametro (fila que se llenará con el parámetro ratificado de cerrar el mes con 4.000.000 de pesos; sin valor hasta que se ratifiquen las reglas de proyección).';
@@ -132,19 +134,18 @@ CREATE VIEW cashflow_indicator AS
 WITH now AS (
     SELECT date_trunc('month', current_date)::date AS current_month
 ), inc AS (
-    SELECT month, label, value FROM cashflow_cell WHERE block = 'Craftech Inc. en dólares'
+    SELECT month, period, label, value FROM cashflow_cell WHERE block = 'Craftech Inc. en dólares'
 ), caja AS (
-    SELECT (current_month - interval '1 month')::date AS month,
-           (SELECT value FROM inc
-            WHERE label = 'Saldo Final' AND month = current_month - interval '1 month') AS value
-    FROM now
+    SELECT l.month, (SELECT value FROM inc WHERE label = 'Saldo Final' AND month = l.month) AS value
+    FROM (SELECT max(month) AS month FROM inc WHERE period = 'real') l
 ), outflow AS (
     SELECT CASE WHEN count(total) = 3 THEN avg(total) END AS value
     FROM (
         SELECT CASE WHEN count(value) = 3 THEN sum(value) END AS total
-        FROM inc, now
+        FROM inc
         WHERE label IN ('Sueldos', 'Gastos', 'USD enviados a la S.A.')
-          AND month >= current_month - interval '3 months' AND month < current_month
+          AND month IN (SELECT DISTINCT month FROM inc WHERE period = 'real'
+                        ORDER BY month DESC LIMIT 3)
         GROUP BY month
     ) totals
 ), march AS (
@@ -153,7 +154,7 @@ WITH now AS (
     FROM now
 )
 SELECT 'caja_hoy' AS indicator, 1 AS position, caja.month, caja.value, 'usd' AS unit,
-       'Saldo Final de «Craftech Inc. en dólares» del último mes real cerrado (el anterior al mes en curso).' AS formula,
+       'Saldo Final de «Craftech Inc. en dólares» del último mes real cerrado (el último mes completo con movimientos).' AS formula,
        true AS proposed
 FROM caja
 UNION ALL
@@ -205,9 +206,9 @@ COMMENT ON COLUMN mcp.caja_mensual.orden_bloque IS 'Orden del bloque, desde 0.';
 COMMENT ON COLUMN mcp.caja_mensual.fila IS 'Fila, con el texto de la pestaña.';
 COMMENT ON COLUMN mcp.caja_mensual.orden_fila IS 'Orden de la fila dentro del bloque, desde 0.';
 COMMENT ON COLUMN mcp.caja_mensual.mes IS 'Mes (primer día del mes).';
-COMMENT ON COLUMN mcp.caja_mensual.periodo IS 'real (antes del mes en curso), en_curso (el mes de hoy, con los movimientos que hay) o proyectado.';
+COMMENT ON COLUMN mcp.caja_mensual.periodo IS 'real (hasta el último mes cerrado con movimientos), en_curso (el mes de hoy, con los movimientos que hay) o proyectado (el resto, incluido un mes cerrado que todavía no tiene movimientos).';
 COMMENT ON COLUMN mcp.caja_mensual.valor IS 'Valor calculado desde los movimientos, en la unidad; nulo si origen no es recalculada.';
-COMMENT ON COLUMN mcp.caja_mensual.unidad IS 'ars (pesos) o usd (dólares).';
+COMMENT ON COLUMN mcp.caja_mensual.unidad IS 'ars (pesos) o usd (dólares). Aunque el bloque se llama «Argentina en miles de pesos», sus valores están en la misma escala que la planilla: no hay que multiplicarlos por mil.';
 COMMENT ON COLUMN mcp.caja_mensual.origen IS 'recalculada (sale de los movimientos), sin_regla (fila sin regla ratificada o mes proyectado: sin valor) o parametro (fila del parámetro ratificado de cerrar el mes con 4.000.000 de pesos en un mes proyectado: sin valor hasta que se ratifiquen las reglas de proyección).';
 COMMENT ON COLUMN mcp.caja_mensual.motivo IS 'Por qué no hay valor; nulo si lo hay.';
 COMMENT ON COLUMN mcp.caja_mensual.planilla IS 'Planilla donde está la celda equivalente: CASH FLOW MENSUAL.';
@@ -216,32 +217,42 @@ COMMENT ON COLUMN mcp.caja_mensual.celda IS 'Celda equivalente en la pestaña, e
 COMMENT ON COLUMN mcp.caja_mensual.pestaña_id IS 'Identificador de la pestaña (mcp.tabs.id).';
 COMMENT ON COLUMN mcp.caja_mensual.lectura_id IS 'Lectura de la pestaña que ubicó la celda.';
 
--- Salaries keep no detail: cash_movement_sueldos_without_detail already forbids it.
+-- Salaries only as a total: one row per month, bank, currency, rubro and agrupador, never a
+-- payment (cash_movement_sueldos_without_detail already keeps their detail out).
 CREATE VIEW mcp.movimientos_de_caja AS
 SELECT m.month AS mes, m.bank AS banco, m.legal_entity AS entidad, m.historical AS historica,
        m.adjustment AS ajuste, m.currency AS moneda, m.amount AS monto, m.fx_rate AS tipo_cambio,
        m.amount_usd AS monto_usd, m.movement_type AS tipo_movimiento, m.rubro, m.agrupador,
        m.detalle, m.subdetalle, m.equipo,
        m.cell_ref AS celda, m.source_tab_id AS pestaña_id, m.snapshot_id AS lectura_id
-FROM cash_movement m;
+FROM cash_movement m
+WHERE m.rubro IS DISTINCT FROM '01. Sueldos' AND m.movement_type IS DISTINCT FROM 'Sueldos'
+UNION ALL
+SELECT m.month, m.bank, m.legal_entity, m.historical, m.adjustment, m.currency, sum(m.amount),
+       NULL, sum(m.amount_usd), m.movement_type, m.rubro, m.agrupador, NULL, NULL, NULL,
+       NULL, m.source_tab_id, m.snapshot_id
+FROM cash_movement m
+WHERE m.rubro = '01. Sueldos' OR m.movement_type = 'Sueldos'
+GROUP BY m.month, m.bank, m.legal_entity, m.historical, m.adjustment, m.currency,
+         m.movement_type, m.rubro, m.agrupador, m.source_tab_id, m.snapshot_id;
 
-COMMENT ON VIEW mcp.movimientos_de_caja IS 'Movimientos bancarios de la pestaña Consolidado de «Base informe Craftech » (ADR-003), de los que sale mcp.caja_mensual. En los sueldos (rubro «01. Sueldos» o tipo de movimiento Sueldos) detalle, subdetalle y equipo son siempre nulos: pueden traer nombres de personas.';
+COMMENT ON VIEW mcp.movimientos_de_caja IS 'Movimientos bancarios de la pestaña Consolidado de «Base informe Craftech » (ADR-003), de los que sale mcp.caja_mensual. Los sueldos (rubro «01. Sueldos» o tipo de movimiento Sueldos) van solo como total: una fila por mes, banco, moneda, tipo de movimiento, rubro y agrupador, nunca un pago; detalle, subdetalle, equipo, tipo de cambio y celda son nulos.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.mes IS 'Mes del movimiento ("Mes Corriente"), primer día del mes.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.banco IS 'Banco, tal como está en la planilla.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.entidad IS 'Sociedad dueña de la cuenta: Craftech S.A. (Galicia, Macro, Credicoop, Caja Córdoba) o Craftech-io Inc. (Mercury, Mesh); nula en cuentas históricas, ajustes y bancos desconocidos.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.historica IS 'Verdadero si la cuenta es histórica: VETA y cripto.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.ajuste IS 'Verdadero si viene de una pestaña de ajuste: banco CLIENTES o AFIP.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.moneda IS 'ARS, USD o USDC.';
-COMMENT ON COLUMN mcp.movimientos_de_caja.monto IS 'Monto en su moneda, con su signo: negativo es una salida.';
-COMMENT ON COLUMN mcp.movimientos_de_caja.tipo_cambio IS 'Tipo de cambio de la fila, tal como está en la planilla.';
-COMMENT ON COLUMN mcp.movimientos_de_caja.monto_usd IS 'Monto en dólares, tal como está en la planilla.';
+COMMENT ON COLUMN mcp.movimientos_de_caja.monto IS 'Monto en su moneda, con su signo: negativo es una salida. En los sueldos, el total del mes.';
+COMMENT ON COLUMN mcp.movimientos_de_caja.tipo_cambio IS 'Tipo de cambio de la fila, tal como está en la planilla; nulo en los totales de sueldos.';
+COMMENT ON COLUMN mcp.movimientos_de_caja.monto_usd IS 'Monto en dólares, tal como está en la planilla; en los sueldos, el total del mes.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.tipo_movimiento IS 'Egresos, Sueldos, Ingresos, Impuestos, Ingresos financieros, Dividendos o Interno (transferencia de Mercury a Mesh).';
 COMMENT ON COLUMN mcp.movimientos_de_caja.rubro IS 'Rubro; config/cashflow_rows.yaml dice en qué fila del cashflow suma.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.agrupador IS 'Agrupador; en «01. Sueldos», CCSS son las cargas sociales.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.detalle IS 'Detalle; siempre nulo en los sueldos.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.subdetalle IS 'Subdetalle; siempre nulo en los sueldos.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.equipo IS 'Equipo; siempre nulo en los sueldos.';
-COMMENT ON COLUMN mcp.movimientos_de_caja.celda IS 'Celda del monto en la pestaña Consolidado, en notación A1.';
+COMMENT ON COLUMN mcp.movimientos_de_caja.celda IS 'Celda del monto en la pestaña Consolidado, en notación A1; nula en los totales de sueldos.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.pestaña_id IS 'Identificador de la pestaña (mcp.tabs.id).';
 COMMENT ON COLUMN mcp.movimientos_de_caja.lectura_id IS 'Lectura de la que sale.';
 

@@ -186,6 +186,22 @@ def test_real_months_add_the_movements_and_no_sheet_value_is_shown(db, env, fake
     assert (Decimal(SHEET_VALUE),) not in every
 
 
+def test_a_closed_month_without_movements_is_not_real_yet(db, env, fake):
+    # Early in the month, before the Consolidado has the last closed month.
+    _set(fake, 41, [m for m in MOVES if R3.strftime("%b-%y") not in str(m)], "file-b")
+    _import(env)
+    inc = _cells(db, INC)
+    assert inc["Saldo Final", R2][2] == "real"
+    assert inc["Sueldos", R3][:3] == (None, "sin_regla", "proyectado")
+    by = {
+        r[0]: r[1:]
+        for r in db.execute("SELECT indicator, month, value FROM cashflow_indicator").fetchall()
+    }
+    assert by["caja_hoy"] == (R2, Decimal("550"))
+    # Two real months only: no average with an empty month in it.
+    assert by["salida_mensual"][1] is None
+
+
 def test_the_current_month_is_recalculated_and_marked(db, env, fake):
     _import(env)
     inc = _cells(db, INC)
@@ -335,8 +351,12 @@ def test_no_salary_of_a_person_reaches_the_cash_views(db, env, fake):
         " WHERE rubro = '01. Sueldos'"
     ).fetchall()
     assert {r[:3] for r in sueldos} == {(None, None, None)}
-    # Per person amounts stay in the movements; the monthly view has the total only.
-    values = {
-        r[0] for r in db.execute("SELECT valor FROM mcp.caja_mensual WHERE valor IS NOT NULL")
-    }
-    assert Decimal("300") in values and not {Decimal("120"), Decimal("180")} & values
+    # R1 pays two salaries from Mesh: both views carry only their total.
+    for view, column in (("mcp.movimientos_de_caja", "monto"), ("mcp.caja_mensual", "valor")):
+        values = {r[0] for r in db.execute(f"SELECT abs({column}) FROM {view}")}
+        assert Decimal("300") in values and not {Decimal("120"), Decimal("180")} & values, view
+    (celda,) = db.execute(
+        "SELECT celda FROM mcp.movimientos_de_caja WHERE rubro = '01. Sueldos' AND mes = %s",
+        (R1,),
+    ).fetchone()
+    assert celda is None
