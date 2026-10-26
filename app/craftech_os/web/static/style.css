@@ -27,6 +27,7 @@ pre { background: #fafafa; border: 1px solid #ddd; padding: 0.8em; overflow-x: a
 .caja-scroll { overflow-x: auto; max-width: 100%; }
 table.caja td, table.caja th { white-space: nowrap; }
 .concepto { position: sticky; left: 0; background: #fafafa; z-index: 1; }
+table.caja .concepto { white-space: normal; min-width: 8em; max-width: 12em; }
 th.bloque { background: #eee; }
 .periodo-en_curso { background: #fff4d6; }
 .periodo-proyectado { background: #e8f0fe; }

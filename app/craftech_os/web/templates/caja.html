@@ -59,13 +59,16 @@
 {% if chart %}
 <section id="grafico">
   <h2>Saldo Final de Craftech Inc. en dólares</h2>
-  <svg class="grafico" viewBox="0 -4 {{ chart.width }} {{ chart.height + 24 }}" width="{{ chart.width }}" height="{{ chart.height + 28 }}" role="img" aria-label="Saldo Final por mes">
+  <div class="caja-scroll">
+  <svg class="grafico" viewBox="0 -4 {{ chart.width }} {{ chart.height + 36 }}" width="{{ chart.width }}" height="{{ chart.height + 40 }}" role="img" aria-label="Saldo Final por mes">
     {% for b in chart.bars %}
     <rect class="barra{% if b.value < 0 %} negativa{% endif %}" x="{{ b.x + 3 }}" y="{{ '%.1f' | format(b.y) }}" width="18" height="{{ '%.1f' | format(b.height) }}"><title>{{ b.month.strftime("%Y-%m") }}: {{ b.value | money }}</title></rect>
     <text class="etiqueta" x="{{ b.x + 12 }}" y="{{ chart.height + 16 }}">{{ b.month.strftime("%m") }}</text>
+    {% if loop.first or b.month.month == 1 %}<text class="etiqueta anio" x="{{ b.x + 12 }}" y="{{ chart.height + 28 }}">{{ b.month.year }}</text>{% endif %}
     {% endfor %}
     <line class="cero" x1="0" x2="{{ chart.width }}" y1="{{ '%.1f' | format(chart.zero) }}" y2="{{ '%.1f' | format(chart.zero) }}"/>
   </svg>
+  </div>
 </section>
 {% endif %}
 {% endif %}

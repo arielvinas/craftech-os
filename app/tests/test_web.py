@@ -769,6 +769,7 @@ def test_caja_table_shows_blocks_rows_and_months_with_a_sticky_concept_column(db
     assert "5,000.00" in _cell(html, "Argentina en miles de pesos-Saldo Final", R2)
     css = client.get("/static/style.css").text
     assert re.search(r"\.concepto \{[^}]*position: sticky", css)
+    assert re.search(r"table\.caja \.concepto \{[^}]*white-space: normal; [^}]*max-width", css)
     assert re.search(r"\.caja-scroll \{[^}]*overflow-x: auto", css)
 
 
@@ -805,6 +806,12 @@ def test_caja_chart_is_server_side_svg_without_scripts(db, client):
     assert 'y1="128.0"' in chart
     assert 'class="barra negativa" x="3" y="128.0" width="18" height="32.0"' in chart
     assert 'y="0.0" width="18" height="128.0"' in chart  # R2, 800
+    # The year under the first bar and under every January; it scrolls on its own.
+    years = re.findall(r'<text class="etiqueta anio" x="(\d+)"[^>]*>(\d{4})</text>', chart)
+    expected = [(str(n * 24 + 12), str(m.year)) for n, m in enumerate((R1, R2, R3, CUR))
+                if n == 0 or m.month == 1]  # fmt: skip
+    assert years == expected
+    assert html[: html.index("<svg")].endswith('<div class="caja-scroll">\n  ')
     assert "<script" not in html.lower() and "style=" not in html
     assert (
         response.headers["content-security-policy"]
