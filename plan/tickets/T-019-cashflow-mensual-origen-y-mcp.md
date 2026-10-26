@@ -60,14 +60,16 @@ Verificado en el repo el 25-oct-2026:
 
 ## Acceptance criteria
 
-- [ ] La migración 0015 crea `cashflow_sheet_cell`, la vista `cashflow_cell`, la vista de indicadores y las tres vistas MCP, con `COMMENT ON` en castellano.
-- [ ] Una lectura sintética del Resumen proyecta `cashflow_sheet_cell` aunque la pestaña sea DERIVADA, y una segunda lectura la reemplaza entera.
-- [ ] Con movimientos y un Resumen sintéticos: un mes real con fila con regla sale `recalculada` con la suma de los movimientos; un mes proyectado sale `importada`; una fila sin regla sale `importada`; una celda del Resumen sin fórmula sale `importada` aunque el mes sea real; la fila de «traer dólares para cerrar el mes con 4 millones de pesos» sale `parametro`.
-- [ ] El mes en curso se distingue de los meses reales cerrados.
-- [ ] Los indicadores dan el valor esperado sobre los datos sintéticos y cada uno trae su fórmula en texto y la marca de propuesto.
-- [ ] `mcp_reader` puede leer `mcp.caja_mensual`, `mcp.movimientos_de_caja` y `mcp.indicadores_de_caja`; `mcp_writer` no.
-- [ ] Un test siembra un movimiento de «01. Sueldos» y verifica que ningún sueldo individual se filtra: ni `mcp.movimientos_de_caja` ni `mcp.caja_mensual` devuelven Detalle, Subdetalle, Equipo o un monto por persona, solo totales por fila y mes.
-- [ ] Los tests usan solo datos sintéticos.
+Reescritos el 2026-10-26 según la sección Decisions: ninguna celda muestra un valor del Resumen; lo que no se calcula desde los movimientos queda sin valor y marcado (origen `sin_regla` o `parametro`, con `motivo`). El origen `importada` desaparece.
+
+- [x] La migración 0015 crea `cashflow_row`, `cashflow_sheet_cell`, la vista `cashflow_cell`, la vista de indicadores `cashflow_indicator` y las tres vistas MCP, con `COMMENT ON` en castellano en cada tabla, vista y columna (`test_db.py`, `test_mcp.py`).
+- [x] Una lectura sintética del Resumen proyecta `cashflow_sheet_cell` aunque la pestaña sea DERIVADA, y una segunda lectura la reemplaza entera (`test_the_resumen_is_projected_though_derivada_and_a_new_read_replaces_it`); las otras pestañas no se tocan (`test_other_tabs_are_not_projected`); `interpret` también la proyecta (`test_the_cli_interpret_projects_the_resumen_too`).
+- [x] Con movimientos y un Resumen sintéticos: un mes real con fila con regla sale `recalculada` con la suma de los movimientos, aunque la celda del Resumen sea tipeada y tenga otro valor (`test_real_months_add_the_movements_and_no_sheet_value_is_shown`); un mes proyectado y una fila sin regla salen sin valor, con origen `sin_regla` y su motivo (`test_projected_months_and_rows_without_a_rule_have_no_value_and_say_why`); «$ recibidos de la INC» y «USD enviados a la S.A.» de los dos bloques de Craftech Inc. salen `parametro`, sin valor, en los meses proyectados (`test_the_four_million_parameter_rows_are_marked_in_projected_months`).
+- [x] El mes en curso se recalcula y se distingue de los meses reales cerrados: periodo `en_curso` (`test_the_current_month_is_recalculated_and_marked`).
+- [x] Los indicadores (solo Craftech Inc., en dólares) dan el valor esperado sobre los datos sintéticos y cada uno trae su fórmula en texto y la marca de propuesto (`test_the_indicators_are_proposed_with_their_formula`).
+- [x] `mcp_reader` puede leer `mcp.caja_mensual`, `mcp.movimientos_de_caja` y `mcp.indicadores_de_caja`; `mcp_writer` no (`test_the_reader_reads_the_cash_views_and_the_writer_does_not`).
+- [x] Un test siembra un movimiento de «01. Sueldos» y verifica que ningún sueldo individual se filtra por `mcp.movimientos_de_caja` ni por `mcp.caja_mensual`: solo totales por fila y mes (`test_no_salary_of_a_person_reaches_the_cash_views`).
+- [x] Los tests usan solo datos sintéticos; los eventos llevan cantidades, nunca montos (`test_projection_events_carry_counts_only`).
 
 ## Out of scope
 
@@ -80,3 +82,44 @@ Verificado en el repo el 25-oct-2026:
 - 2026-10-26 — **Sociedad y moneda de los cinco indicadores** → Opción a: solo Craftech Inc., en dólares. Caja hoy = Saldo Final de Craftech Inc. en dólares del último mes real cerrado; salida mensual = promedio de Sueldos + Gastos + USD enviados a la S.A. de los últimos tres meses reales cerrados; cobertura = caja ÷ salida; cierres de mar-27 = Saldo Final de cada bloque de Craftech Inc. El mes en curso no cuenta como cerrado. Todo calculado por el software.
 - 2026-10-26 — **Celdas con origen parametro (traer dólares para cerrar el mes con 4 millones de pesos)** → Opción b: la fila «$ recibidos de la INC» del bloque Argentina más «USD enviados a la S.A.» de los dos bloques de Craftech Inc., en los meses proyectados. El parámetro (4 millones de pesos) lo aplica el software, no se lee el valor calculado de la planilla.
 - 2026-10-26 — **Origen de cada celda del Resumen mensual (todos los meses reales están tipeados sin fórmula)** → Ariel: todos los valores se calculan en el software a partir de los datos (los movimientos de caja). No se muestra ningún valor tomado del Resumen de la planilla, tenga o no fórmula; la planilla queda solo como referencia para la comparación de paridad. Si una fila no se puede calcular desde los datos (no hay regla ratificada), no se inventa: queda sin valor y marcada, y lo reportás.
+
+## Implementation
+
+- `app/migrations/0015_cashflow_cell.sql`:
+  - tablas `cashflow_row` (las reglas de `config/cashflow_rows.yaml`) y `cashflow_sheet_cell` (lo que dice el Resumen, solo para ubicar filas y meses y para la paridad de T-020);
+  - vista `cashflow_cell`: suma `cash_movement` por regla. Saldo inicial y final son acumulados por banco; las transferencias internas se cancelan. Los subtotales suman filas del bloque. Periodo `real`, `en_curso` o `proyectado`; origen `recalculada`, `sin_regla` o `parametro`, con `motivo`;
+  - vista `cashflow_indicator` y las vistas `mcp.caja_mensual`, `mcp.movimientos_de_caja` y `mcp.indicadores_de_caja`, con `GRANT SELECT` solo a `mcp_reader`.
+- `config/cashflow_rows.yaml`: 27 filas en 5 bloques, con regla de cálculo (rubros, bancos, saldo, suma, signo) para 13 filas; las demás quedan sin regla.
+- `app/craftech_os/cashflow.py`:
+  - `rows()` valida el yaml: unidad, saldo con bancos, signo, y que cada suma nombre filas del bloque con regla;
+  - `locate()` ubica secciones, filas y meses en el Resumen;
+  - `project()` rehace las dos tablas y registra el evento `cashflow_projected` con cantidades.
+- El importador y `craftech-os interpret` llaman a `cashflow.project` en cada lectura; vuelve sin hacer nada si la pestaña no es el Resumen.
+
+**Prueba de humo** (copia de la base de desarrollo, 2026-10-26; solo cantidades y proporciones):
+- Las 27 filas quedan ubicadas: 1.431 celdas, 53 meses, `filas_sin_ubicar` = 0, en 0,17 s.
+- 38 meses reales, 1 en curso y 14 proyectados.
+- 507 celdas recalculadas y 42 de parámetro; las demás quedan sin regla (sin valor y marcadas).
+- Caja hoy, salida mensual y cobertura tienen valor; los dos cierres de marzo-27 quedan nulos hasta que haya reglas de proyección.
+- Paridad orientativa contra la planilla (dentro del 3 %):
+  - Craftech Inc. en dólares: 49 % de las celdas recalculadas. Saldo inicial, saldo final y cobros: 70 % cada uno. Gastos: 8 %. USD enviados: 21 %.
+  - Argentina: 14 %.
+  - Lo cierra T-020.
+- Las vistas MCP tardan 0,65 s (`caja_mensual`) y 1,5 s (`indicadores_de_caja`). `mcp_reader` lee las tres y `mcp_writer` recibe «permission denied».
+
+## Test plan
+
+- `uv run pytest -q`: 349 pasan (12 en `test_cashflow.py`, más los cambios de `test_db.py` y `test_consolidado.py`). Además pasan `ruff check`, `ruff format --check` y `uv build`.
+- Mutaciones:
+  - 7 muertas: saldo final sin el mes, signo ignorado, valor en meses proyectados, suma sin chequear la regla, primera aparición de la etiqueta, parámetro ignorado, salida sin USD enviados.
+  - 1 que sobrevivía: el `CASE` de sueldos en la vista. Era redundante con el `CHECK` de la tabla y se sacó.
+  - 1 equivalente: un `GRANT` a `mcp_writer` no le da acceso, porque no tiene `USAGE` sobre el esquema `mcp`.
+- Manual: la prueba de humo de arriba sobre una copia de la base, ya borrada.
+
+## Post-merge
+
+- En la base de desarrollo: `craftech-os migrate` (aplica la 0015) y después `craftech-os interpret --all`, para proyectar el Resumen ya leído.
+- Llevar a Emi y Ro:
+  - las fórmulas de los indicadores;
+  - las reglas de las filas sin regla (Ventas y Gastos en pesos, saldo en dólares, bloque con pagos proyectados, diferencias);
+  - por qué el saldo de Argentina no coincide: faltan el saldo de apertura y las inversiones.
