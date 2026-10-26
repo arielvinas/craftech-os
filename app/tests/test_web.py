@@ -801,6 +801,10 @@ def test_caja_chart_is_server_side_svg_without_scripts(db, client):
     assert chart.count('<rect class="barra') == 4
     assert chart.count('class="barra negativa"') == 1
     assert f"{NEXT:%Y-%m}" not in chart
+    # From -200 to 800 in 160 units: zero at 128; bars grow up from it, or down for negatives.
+    assert 'y1="128.0"' in chart
+    assert 'class="barra negativa" x="3" y="128.0" width="18" height="32.0"' in chart
+    assert 'y="0.0" width="18" height="128.0"' in chart  # R2, 800
     assert "<script" not in html.lower() and "style=" not in html
     assert (
         response.headers["content-security-policy"]
