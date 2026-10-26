@@ -62,3 +62,4 @@
 - [ ] [datos] value() devuelve el JSON crudo de effectiveValue ({"stringValue": ""}) para celdas vacías explícitas; afecta a todos los intérpretes — QA T-018 r1 (F4)
 - [ ] [decision-pending] T-020 asume celdas 'importada' (informa su cantidad); ADR-003 ahora dice que no hay importadas: origen recalculada, sin_regla o parametro, y la paridad compara recalculada contra cashflow_sheet_cell — T-019
 - [ ] [decision-pending] T-021 asume celdas 'importada' y rayado de celdas fijadas a mano; ADR-003 ahora dice que no se muestra ningún valor del Resumen: celdas sin_regla/parametro sin valor con motivo, sin rayado — T-019
+- [ ] [silent-data-loss] Una lectura del Resumen sin filas reconocibles vacía cashflow_sheet_cell y cashflow_cell sin abrir un issue; solo queda el evento cashflow_projected con filas: 0 — QA T-019 r1 (hallazgo 3)
