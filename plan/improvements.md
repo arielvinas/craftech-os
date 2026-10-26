@@ -65,3 +65,4 @@
 - [ ] [silent-data-loss] Una lectura del Resumen sin filas reconocibles vacía cashflow_sheet_cell y cashflow_cell sin abrir un issue; solo queda el evento cashflow_projected con filas: 0 — QA T-019 r1 (hallazgo 3)
 - [ ] [privacy] mcp.movimientos_de_caja: 123/435 filas de sueldos agregadas salen de un solo pago (comisión/bono), el total equivale al monto de una persona — decidir si alcanza — QA T-019 r2 (minor 1)
 - [ ] [test-gap] salida mensual 'últimos tres meses reales' sin test que la distinga de la ventana por calendario — QA T-019 r2 (minor 2)
+- [ ] [test-gap] sueldos reconocidos solo por tipo de movimiento Sueldos (otro rubro) sin test en mcp.movimientos_de_caja — QA T-019 r2 (minor 3)
