@@ -16,7 +16,7 @@ Cuarto ticket de la caja (`plan/adr/ADR-003-caja-desde-movimientos.md`, aprobado
 
 Decisiones del documento de arquitectura (ADR-003):
 - Tabla con la columna de conceptos fija y los meses desplazándose en horizontal.
-- El mes en curso y los meses proyectados van tintados; las celdas fijadas a mano en el Resumen (sin fórmula), rayadas; los negativos, en rojo.
+- El mes en curso y los meses proyectados van tintados; los negativos, en rojo. (Las celdas fijadas a mano ya no se rayan: ver `## Decisions`.)
 - Indicadores arriba, cada uno con su fórmula al lado del número y la marca de que está propuesto, no ratificado.
 - Gráfico en SVG armado en el servidor: sin JavaScript y sin cambiar la política de seguridad de contenido (CSP).
 - El diseño de referencia no aporta números: todos salen de la base.
@@ -39,8 +39,8 @@ Verificado en el repo el 25-oct-2026:
 1. **Indicadores.** Caja hoy, salida mensual, meses de cobertura y los dos cierres de marzo-27 (con y sin pagos proyectados), cada uno con su fórmula en texto y la leyenda "propuesto".
 2. **Tabla.** Un bloque por cada bloque del Resumen, filas por concepto y columnas por mes, en la unidad de la fila.
    - Columna de conceptos fija (`position: sticky`) y desplazamiento horizontal de los meses.
-   - Clases por origen: mes en curso y proyectado tintados, celda fijada a mano rayada, negativo en rojo. Una leyenda explica cada marca.
-   - Cada celda deja ver su origen (`recalculada`, `importada`, `parametro`) y la celda del Resumen de donde viene, sin JavaScript (por ejemplo con `title`).
+   - Clases: mes en curso y proyectado tintados, negativo en rojo, celda sin valor (`sin_regla` o `parametro`) marcada. Una leyenda explica cada marca.
+   - Cada celda deja ver su origen (`recalculada`, `sin_regla`, `parametro`), su motivo si no tiene valor y la celda equivalente del Resumen, sin JavaScript (por ejemplo con `title`).
 3. **Gráfico SVG.** El saldo final por mes, armado en el servidor dentro de la plantilla. Sin `<script>`, sin estilos en línea que pidan cambiar la CSP y sin librerías externas.
 4. **Restricciones.** Solo lectura: ninguna ruta POST. Sin parámetros en la primera versión. Ningún nombre ni monto en los logs del servidor web.
 
@@ -53,7 +53,7 @@ Verificado en el repo el 25-oct-2026:
 - [ ] `GET /caja` responde 200 con datos sintéticos sembrados y "Caja" aparece en el menú.
 - [ ] Los cinco indicadores aparecen con su fórmula y la leyenda "propuesto".
 - [ ] La tabla muestra los bloques, filas y meses sembrados; la columna de conceptos es fija y los meses se desplazan en horizontal.
-- [ ] El mes en curso y los proyectados llevan su clase de tinte, una celda importada sin fórmula lleva la clase de rayado y un valor negativo la clase roja (test sobre el HTML).
+- [ ] El mes en curso y los proyectados llevan su clase de tinte, una celda sin valor lleva su clase y su motivo, y un valor negativo la clase roja (test sobre el HTML). Ningún valor del Resumen aparece en la pantalla.
 - [ ] El gráfico es un `<svg>` en la respuesta, la página no tiene ningún `<script>` y el encabezado de CSP es el mismo que en las demás pantallas.
 - [ ] Sin migraciones nuevas y sin rutas POST nuevas.
 - [ ] Los tests usan solo datos sintéticos.
