@@ -1,7 +1,7 @@
 ---
 id: T-020
 title: Paridad del cashflow recalculado contra el Resumen
-status: qa
+status: pr
 priority: medium
 lane: core
 depends_on: [T-019]
