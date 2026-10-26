@@ -67,3 +67,4 @@
 - [ ] [test-gap] salida mensual 'últimos tres meses reales' sin test que la distinga de la ventana por calendario — QA T-019 r2 (minor 2)
 - [ ] [test-gap] sueldos reconocidos solo por tipo de movimiento Sueldos (otro rubro) sin test en mcp.movimientos_de_caja — QA T-019 r2 (minor 3)
 - [ ] [ui] /caja en 375 px: la columna de conceptos ocupa 314 de 333 px y los meses casi no se ven — QA T-021 r1 (F1)
+- [ ] [ui] /caja: el gráfico tiene ancho fijo y desplaza toda la página en horizontal en pantallas angostas — QA T-021 r1 (F2)
