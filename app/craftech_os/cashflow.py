@@ -25,6 +25,10 @@ BALANCES = ("inicial", "final")
 SECTION, LABEL, FIRST_MONTH = 0, 1, 2
 
 
+def _has_rule(row: dict) -> bool:
+    return any(row.get(k) for k in ("rubros", "agrupadores", "balance"))
+
+
 def rows(path: Path = ROWS_FILE) -> list[dict]:
     """The rows of the cashflow, in order, with how each is computed; ValueError if malformed."""
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -44,8 +48,8 @@ def rows(path: Path = ROWS_FILE) -> list[dict]:
                 raise ValueError(f"{what}: sign must be '-' or absent")
             for added in rule["adds"]:
                 target = next((r for r in block["rows"] if r["label"] == added), None)
-                if added not in labels or target.get("adds"):
-                    raise ValueError(f"{what}: adds {added!r}, not a plain row of the block")
+                if added not in labels or target.get("adds") or not _has_rule(target):
+                    raise ValueError(f"{what}: adds {added!r}, not a row of the block with a rule")
             out.append(
                 {
                     "block": name,

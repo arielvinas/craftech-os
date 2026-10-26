@@ -89,8 +89,7 @@ WITH months AS (
 ), computed AS (
     SELECT b.*,
            CASE WHEN cardinality(b.adds) = 0 THEN b.computed ELSE (
-               SELECT CASE WHEN count(a.computed) = cardinality(b.adds) THEN sum(a.computed) END
-               FROM base a
+               SELECT sum(a.computed) FROM base a
                WHERE a.block = b.block AND a.month = b.month AND a.label = ANY (b.adds))
            END AS value,
            CASE WHEN b.month < date_trunc('month', current_date) THEN 'real'
@@ -217,17 +216,14 @@ COMMENT ON COLUMN mcp.caja_mensual.celda IS 'Celda equivalente en la pestaña, e
 COMMENT ON COLUMN mcp.caja_mensual.pestaña_id IS 'Identificador de la pestaña (mcp.tabs.id).';
 COMMENT ON COLUMN mcp.caja_mensual.lectura_id IS 'Lectura de la pestaña que ubicó la celda.';
 
+-- Salaries keep no detail: cash_movement_sueldos_without_detail already forbids it.
 CREATE VIEW mcp.movimientos_de_caja AS
 SELECT m.month AS mes, m.bank AS banco, m.legal_entity AS entidad, m.historical AS historica,
        m.adjustment AS ajuste, m.currency AS moneda, m.amount AS monto, m.fx_rate AS tipo_cambio,
        m.amount_usd AS monto_usd, m.movement_type AS tipo_movimiento, m.rubro, m.agrupador,
-       CASE WHEN NOT sueldo THEN m.detalle END AS detalle,
-       CASE WHEN NOT sueldo THEN m.subdetalle END AS subdetalle,
-       CASE WHEN NOT sueldo THEN m.equipo END AS equipo,
+       m.detalle, m.subdetalle, m.equipo,
        m.cell_ref AS celda, m.source_tab_id AS pestaña_id, m.snapshot_id AS lectura_id
-FROM cash_movement m,
-     LATERAL (SELECT m.rubro IS NOT DISTINCT FROM '01. Sueldos'
-                     OR m.movement_type IS NOT DISTINCT FROM 'Sueldos' AS sueldo) s;
+FROM cash_movement m;
 
 COMMENT ON VIEW mcp.movimientos_de_caja IS 'Movimientos bancarios de la pestaña Consolidado de «Base informe Craftech » (ADR-003), de los que sale mcp.caja_mensual. En los sueldos (rubro «01. Sueldos» o tipo de movimiento Sueldos) detalle, subdetalle y equipo son siempre nulos: pueden traer nombres de personas.';
 COMMENT ON COLUMN mcp.movimientos_de_caja.mes IS 'Mes del movimiento ("Mes Corriente"), primer día del mes.';

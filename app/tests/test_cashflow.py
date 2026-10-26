@@ -93,6 +93,8 @@ RESUMEN_ROWS = [
     ["CASH FLOW USA", "Saldo Inicial", *[SHEET_VALUE] * 5],
     [None, "Pagos Recibidos INC", *[SHEET_VALUE] * 5],
     [None, "Saldo Final", *[SHEET_VALUE] * 5],
+    # A label again in the same section: the first one is taken.
+    [None, "Saldo Final", *[SHEET_VALUE] * 5],
     ["CASH FLOW USA Con facturacion minima", "Saldo Inicial", *[SHEET_VALUE] * 5],
     ["CONTROL CASH FLOW REAL CON PROYECTADO"],
     ["Pagos Proyectados Craftech", None, *[SHEET_VALUE] * 5],
@@ -278,6 +280,11 @@ def test_cashflow_rows_validate_their_arithmetic(tmp_path):
             {"name": "x", "resumen": "X", "unit": "usd", "rows": [{"label": "a", "adds": ["b"]}]}
         ]
     }
+    path.write_text(yaml.safe_dump(bad))
+    with pytest.raises(ValueError, match="b"):
+        cashflow.rows(path)
+    # A subtotal of a row without a rule would add only part of what it says.
+    bad["blocks"][0]["rows"].append({"label": "b"})
     path.write_text(yaml.safe_dump(bad))
     with pytest.raises(ValueError, match="b"):
         cashflow.rows(path)
