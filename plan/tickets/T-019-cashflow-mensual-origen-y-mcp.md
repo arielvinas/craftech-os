@@ -77,4 +77,5 @@ Verificado en el repo el 25-oct-2026:
 
 ## Decisions
 
+- 2026-10-26 — **Celdas con origen parametro (traer dólares para cerrar el mes con 4 millones de pesos)** → Opción b: la fila «$ recibidos de la INC» del bloque Argentina más «USD enviados a la S.A.» de los dos bloques de Craftech Inc., en los meses proyectados. El parámetro (4 millones de pesos) lo aplica el software, no se lee el valor calculado de la planilla.
 - 2026-10-26 — **Origen de cada celda del Resumen mensual (todos los meses reales están tipeados sin fórmula)** → Ariel: todos los valores se calculan en el software a partir de los datos (los movimientos de caja). No se muestra ningún valor tomado del Resumen de la planilla, tenga o no fórmula; la planilla queda solo como referencia para la comparación de paridad. Si una fila no se puede calcular desde los datos (no hay regla ratificada), no se inventa: queda sin valor y marcada, y lo reportás.
