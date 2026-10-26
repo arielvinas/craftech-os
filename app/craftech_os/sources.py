@@ -5,6 +5,7 @@ from pathlib import Path
 import psycopg
 import yaml
 
+from craftech_os import yaml_unique
 from craftech_os.diff.compare import column_index
 from craftech_os.interpret import consolidado, fundings, interpreter
 
@@ -88,33 +89,17 @@ def _schema(value, what: str, name: str) -> dict:
     return value
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
-    """SafeLoader that rejects duplicate mapping keys instead of keeping the last one."""
-
-
-def _unique_mapping(loader, node, deep=False):
-    mapping = loader.construct_mapping(node, deep=deep)
-    seen = set()
-    for key_node, _ in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        if key in seen:
-            raise SourcesError(f"duplicated key {key!r} at line {key_node.start_mark.line + 1}")
-        seen.add(key)
-    return mapping
-
-
-_UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping)
-
-
 def parse(text: str) -> list[dict]:
     """Validate sources.yaml.
 
     Returns [{title, drive_id, default_class, tabs: [(name, class)], schemas: {name: schema}}].
     """
     try:
-        data = yaml.load(text, Loader=_UniqueKeyLoader)
+        data = yaml_unique.load(text)
     except yaml.YAMLError as e:
         raise SourcesError(f"invalid YAML: {e}") from e
+    except ValueError as e:
+        raise SourcesError(str(e)) from e
     if (
         not isinstance(data, dict)
         or set(data) != {"sources"}

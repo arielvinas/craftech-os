@@ -7,7 +7,16 @@ from pathlib import Path
 import psycopg
 from googleapiclient.errors import HttpError
 
-from craftech_os import attribution, clients, events, interpret, migrate, sources, worker
+from craftech_os import (
+    attribution,
+    cashflow,
+    clients,
+    events,
+    interpret,
+    migrate,
+    sources,
+    worker,
+)
 from craftech_os.diff import store
 from craftech_os.ingest import drive_activity, importer
 from craftech_os.ingest.google import Google, GoogleError
@@ -243,6 +252,9 @@ def cmd_interpret(args) -> None:
             raise sources.SourcesError(f"no active tab {args.tab} with a snapshot")
         done = 0
         for snapshot_id, title, name in latest:
+            projected = cashflow.project(conn, snapshot_id)
+            if projected is not None:
+                print(f"{title} / {name}: {projected['rows']} rows, {projected['cells']} cells")
             counts = interpret.run(conn, snapshot_id)
             if counts is None:
                 continue

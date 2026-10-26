@@ -21,6 +21,12 @@ Mismo paquete, misma imagen, mismos tres procesos. Sin dependencias nuevas.
 9. **Migración 0014.** `cash_movement` y `cashflow_sheet_cell` con `COMMENT ON` en castellano y enumeraciones con `CHECK`; tipos nuevos en el `CHECK` de `issue`: `cash_header_mismatch` (encabezados que no coinciden), `cash_unknown_bank` (banco desconocido) y `cash_unmapped_rubro` (rubro sin regla). `details` con cantidades y referencias, nunca montos.
 10. **Web: `/caja`, solo lectura, sobre las mismas vistas y sin migraciones.** Columna de conceptos fija con desplazamiento horizontal de los meses, mes en curso y proyectados tintados, celdas fijadas a mano rayadas, negativos en rojo, y gráfico por mes en SVG armado en el servidor, sin JavaScript y sin cambiar la política de contenido.
 
+**Nota del 2026-10-26 (decisiones de Ariel en T-019).** Ningún valor del Resumen se muestra: todas las celdas se calculan desde los movimientos y el Resumen queda solo para ubicar filas y meses y para la paridad. El origen `importada` desaparece. Una fila sin regla ratificada y los meses proyectados quedan sin valor, con origen `sin_regla` y su motivo. Las filas «$ recibidos de la INC» y «USD enviados a la S.A.» de los dos bloques de Craftech Inc. quedan como `parametro`, sin valor, en los meses proyectados. Tampoco hay celdas fijadas a mano que rayar. Los indicadores son solo de Craftech Inc., en dólares:
+- caja hoy = saldo final del último mes real cerrado;
+- salida = promedio de Sueldos + Gastos + USD enviados de los últimos tres meses reales cerrados;
+- cobertura = caja ÷ salida;
+- cierres de marzo-27 = saldo final de cada bloque de Craftech Inc.
+
 ## Lo que NO se construye ahora
 
 - **Motor de proyección:** cuando Emi y Ro ratifiquen cómo se proyectan los pagos y el parámetro de los 4 millones. Hasta entonces, los meses proyectados se importan.

@@ -206,9 +206,9 @@ def test_sueldos_keep_no_detail_and_no_name_reaches_problems_or_events(db, env, 
     # Tipo Mov "Sueldos" under another rubro can name a person too.
     other_rubro = _row("GALICIA", "CCSS", tipo="Sueldos", agrupador=name, detalle=name)
     lowercase = _row("GALICIA", "CCSS", tipo="sueldos", agrupador=name, detalle=name)
-    _set(
-        fake, 41, [HEADERS, sueldo, unreadable, other_rubro, lowercase, _row("GALICIA")], "file-b"
-    )  # fmt: skip
+    uppercase = _row("GALICIA", "01. SUELDOS", tipo="Egresos", detalle=name)
+    rows = [HEADERS, sueldo, unreadable, other_rubro, lowercase, uppercase, _row("GALICIA")]
+    _set(fake, 41, rows, "file-b")
     _import(env)
     rows = _movements(db)
     assert [r[14:17] for r in rows] == [
@@ -216,8 +216,15 @@ def test_sueldos_keep_no_detail_and_no_name_reaches_problems_or_events(db, env, 
         (None, None, None),
         (None, None, None),
         (None, None, None),
+        (None, None, None),
         ("Detalle Ficticio", "Subdetalle Ficticio", "Equipo Ficticio"),
     ]
+    # Other spellings are stored canonically, so the MCP view keeps them as totals only.
+    assert [r[11:13] for r in rows[3:5]] == [("Sueldos", "CCSS"), ("Egresos", "01. Sueldos")]
+    (singles,) = db.execute(
+        "SELECT count(*) FROM mcp.movimientos_de_caja WHERE celda IN ('K5', 'K6')"
+    ).fetchone()
+    assert singles == 0
     assert rows[1][8] is None
     assert _issues(db, "valor_ilegible") == [("fila 3:Amount", {"cell_ref": "K3"})]
     assert _issues(db, "cash_unknown_bank")
@@ -305,7 +312,7 @@ def test_cashflow_rows_hold_labels_only():
     )
     assert "01. Sueldos" in gastos["rubros"] and "04. Alquileres" in gastos["rubros"]
     sin_regla = [r for r in rules if not (r["rubros"] or r["agrupadores"] or r["banks"])]
-    assert {"Saldo Inicial", "Saldo Final en USD"} <= {r["label"] for r in sin_regla}
+    assert {"Ventas en $", "Saldo Final en USD"} <= {r["label"] for r in sin_regla}
 
 
 def test_cashflow_rows_reject_amounts(tmp_path):

@@ -60,3 +60,9 @@
 - [ ] [docs] Comentarios de la migración 0014 y de config/cashflow_rows.yaml dicen que se revisa el agrupador, pero el código solo mira el rubro — QA T-018 r1 (F2)
 - [ ] [datos] La transferencia Mercury→Mesh solo se reconoce si el texto es exactamente «MERCURY» — QA T-018 r1 (F3)
 - [ ] [datos] value() devuelve el JSON crudo de effectiveValue ({"stringValue": ""}) para celdas vacías explícitas; afecta a todos los intérpretes — QA T-018 r1 (F4)
+- [ ] [decision-pending] T-020 asume celdas 'importada' (informa su cantidad); ADR-003 ahora dice que no hay importadas: origen recalculada, sin_regla o parametro, y la paridad compara recalculada contra cashflow_sheet_cell — T-019
+- [ ] [decision-pending] T-021 asume celdas 'importada' y rayado de celdas fijadas a mano; ADR-003 ahora dice que no se muestra ningún valor del Resumen: celdas sin_regla/parametro sin valor con motivo, sin rayado — T-019
+- [ ] [silent-data-loss] Una lectura del Resumen sin filas reconocibles vacía cashflow_sheet_cell y cashflow_cell sin abrir un issue; solo queda el evento cashflow_projected con filas: 0 — QA T-019 r1 (hallazgo 3)
+- [ ] [privacy] mcp.movimientos_de_caja: 123/435 filas de sueldos agregadas salen de un solo pago (comisión/bono), el total equivale al monto de una persona — decidir si alcanza — QA T-019 r2 (minor 1)
+- [ ] [test-gap] salida mensual 'últimos tres meses reales' sin test que la distinga de la ventana por calendario — QA T-019 r2 (minor 2)
+- [ ] [test-gap] sueldos reconocidos solo por tipo de movimiento Sueldos (otro rubro) sin test en mcp.movimientos_de_caja — QA T-019 r2 (minor 3)

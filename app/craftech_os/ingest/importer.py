@@ -9,7 +9,7 @@ import httplib2
 import psycopg
 from googleapiclient.errors import HttpError
 
-from craftech_os import events, interpret
+from craftech_os import cashflow, events, interpret
 from craftech_os.diff import store
 from craftech_os.ingest import document
 from craftech_os.ingest.google import Google, GoogleError, status
@@ -195,6 +195,7 @@ def read_tab(
                 ).fetchone()
                 store.record(conn, source_id, tab_id, last and last[0], snapshot_id)
                 interpret.run(conn, snapshot_id)
+                cashflow.project(conn, snapshot_id)
         except psycopg.DataError as e:
             events.record(
                 conn, "tab_failed", source_id=source_id, source_tab_id=tab_id, **error_details(e)

@@ -6,6 +6,14 @@
 # regla"): what is not ratified by Emi and Ro is kept, not interpreted. A rubro or agrupador that
 # no rule names opens cash_unmapped_rubro.
 #
+# How each row is computed (T-019, decision of 2026-10-26: every value comes from the movements,
+# none from the Resumen). `sign: "-"` shows the outflows positive, as the Resumen does.
+# `balance: inicial` adds every movement of `banks` before the month, in the currency of the
+# block; `balance: final` up to the month included. Internal transfers stay in: they cancel
+# between the banks of the block. `adds` sums other rows of the same block. `parametro` marks
+# the row the software fills in projected months to close the month with 4.000.000 pesos
+# (ratified parameter); it has no value until the projection rules are ratified.
+#
 # Cargas sociales are rubro "01. Sueldos" with agrupador "CCSS" (only Argentine or hybrid staff):
 # the Resumen has no row of their own, so they add up in "Gastos" of Argentina.
 
@@ -50,20 +58,27 @@ expense_rubros: &expenses
 blocks:
   - name: "Argentina en miles de pesos"
     resumen: "ARGENTINA"
-    unit: miles_ars
+    unit: ars
     rows:
       - label: "Saldo Inicial"
+        balance: inicial
+        banks: *sa
       - label: "$ recibidos de la INC"
         rubros: ["CAJA. Intercompany"]
         banks: *sa
+        parametro: "Pesos que se traen para cerrar el mes con 4.000.000 de pesos (parámetro ratificado); sin valor hasta que se ratifiquen las reglas de proyección."
       - label: "Pagos Recibidos S.A."
         rubros: ["COBRANZA"]
         banks: *sa
       - label: "Subtotal ingresos"
+        adds: ["$ recibidos de la INC", "Pagos Recibidos S.A."]
       - label: "Gastos"
         rubros: ["01. Sueldos", *expenses]
         banks: *sa
+        sign: "-"
       - label: "Saldo Final"
+        balance: final
+        banks: *sa
       - label: "Ventas en $"
       - label: "Gastos en $"
 
@@ -78,20 +93,29 @@ blocks:
     unit: usd
     rows:
       - label: "Saldo Inicial"
+        balance: inicial
+        banks: *inc
       - label: "Pagos Recibidos INC"
         rubros: ["COBRANZA"]
         banks: *inc
       - label: "Subtotal ingresos"
+        adds: ["Saldo Inicial", "Pagos Recibidos INC"]
       - label: "USD enviados a la S.A."
         rubros: ["CAJA. Intercompany"]
         banks: *inc
+        sign: "-"
+        parametro: &param_usd "Dólares que se envían a la S.A. para cerrar el mes con 4.000.000 de pesos (parámetro ratificado); sin valor hasta que se ratifiquen las reglas de proyección."
       - label: "Sueldos"
         rubros: ["01. Sueldos"]
         banks: *inc
+        sign: "-"
       - label: "Gastos"
         rubros: *expenses
         banks: *inc
+        sign: "-"
       - label: "Saldo Final"
+        balance: final
+        banks: *inc
 
   - name: "Craftech Inc. con pagos proyectados"
     resumen: "CASH FLOW USA CON PAGOS PROYECTADOS"
@@ -101,6 +125,7 @@ blocks:
       - label: "Pagos Recibidos INC"
       - label: "Subtotal ingresos"
       - label: "USD enviados a la S.A."
+        parametro: *param_usd
       - label: "Sueldos"
       - label: "Gastos"
       - label: "Saldo Final"

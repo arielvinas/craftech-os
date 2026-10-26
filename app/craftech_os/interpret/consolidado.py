@@ -10,8 +10,7 @@ and cell references, never amounts or details.
 
 from pathlib import Path
 
-import yaml
-
+from craftech_os import yaml_unique
 from craftech_os.diff.compare import a1, blocks, normalize, value
 from craftech_os.interpret.cells import month, number, unreadable
 
@@ -45,6 +44,7 @@ MOVEMENT_TYPES = (
     "Ingresos financieros",
     "Dividendos",
 )
+CANONICAL_TYPES = {normalize(t): t for t in MOVEMENT_TYPES}
 SUELDOS = "01. Sueldos"
 PRIVATE = ("detalle", "subdetalle", "equipo")
 # The transfer from Mercury to Mesh: the expense is recorded again in Mesh, so it is internal.
@@ -65,7 +65,7 @@ def _texts(node, what: str) -> list[str]:
 
 def rules(path: Path = ROWS_FILE) -> list[dict]:
     """[{block, label, rubros, agrupadores, banks}] of the cashflow rows; empty lists: no rule."""
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = yaml_unique.load(path.read_text(encoding="utf-8"))
     out = []
     for block in data["blocks"]:
         for row in block["rows"]:
@@ -120,9 +120,11 @@ def interpret(doc: dict, schema: dict, title: str) -> tuple[dict | None, list]:
             continue
         fact = {role: _text(cell(role)) for role in ("bank", "rubro", "agrupador", *PRIVATE)}
         currency, movement_type = _text(cell("currency")), _text(cell("movement_type"))
-        private = normalize(fact["rubro"] or "") == normalize(SUELDOS) or normalize(
-            movement_type or ""
-        ) == normalize("Sueldos")
+        # Canonical spelling, so the views and the constraint that hide salaries see every one.
+        movement_type = CANONICAL_TYPES.get(normalize(movement_type or ""), movement_type)
+        if normalize(fact["rubro"] or "") == normalize(SUELDOS):
+            fact["rubro"] = SUELDOS
+        private = fact["rubro"] == SUELDOS or movement_type == "Sueldos"
         if private:
             fact.update(dict.fromkeys(PRIVATE))
         for role in NUMBERS:
