@@ -74,3 +74,7 @@ Verificado en el repo el 25-oct-2026:
 - La paridad contra el Resumen (T-020) y la pantalla `/caja` (T-021).
 - Ratificar las fórmulas de los indicadores y las reglas de proyección (Emi y Ro).
 - Escenarios, «Pagos en disputa» e IVA.
+
+## Decisions
+
+- 2026-10-26 — **Origen de cada celda del Resumen mensual (todos los meses reales están tipeados sin fórmula)** → Ariel: todos los valores se calculan en el software a partir de los datos (los movimientos de caja). No se muestra ningún valor tomado del Resumen de la planilla, tenga o no fórmula; la planilla queda solo como referencia para la comparación de paridad. Si una fila no se puede calcular desde los datos (no hay regla ratificada), no se inventa: queda sin valor y marcada, y lo reportás.
