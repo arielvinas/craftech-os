@@ -62,3 +62,7 @@ Verificado en el repo el 25-oct-2026:
 
 - La paridad en pantalla (la vista es de T-020; mostrarla puede ser otro ticket).
 - Selector de año, escenarios y detalle de movimientos.
+
+## Decisions
+
+- 2026-10-26 — **El ticket supone celdas con origen importada (valores tomados del Resumen); ¿siguen existiendo?** → No. Decisión de Ariel en T-019 (26-oct-2026): todo valor se calcula desde los movimientos y nunca se muestra un valor del Resumen, tenga o no fórmula. Seguir la nota agregada a plan/adr/ADR-003-caja-desde-movimientos.md: orígenes recalculada, sin_regla o parametro; las celdas sin regla quedan sin valor y con motivo, sin rayado; la planilla es solo referencia de paridad (recalculada contra cashflow_sheet_cell). Actualizar el ticket en consecuencia.
